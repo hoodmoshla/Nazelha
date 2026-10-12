@@ -126,7 +126,7 @@ class DownloaderV2Impl(private val appContext: Context) : DownloaderV2, KoinComp
                 .onEach { doYourWork() }
                 .map { it.countActiveWork() }
                 .distinctUntilChanged()
-                .collect { App.setServiceWorkActive(DownloadWorkSource.TASK_QUEUE, it) }
+                .collect { App.setServiceWorkActive(DownloadWorkSource.TASK_QUEUE, it > 0) }
         }
 
         scope.launch(Dispatchers.IO) {

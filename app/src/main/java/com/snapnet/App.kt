@@ -256,7 +256,7 @@ class App : Application() {
         }
 
         /** Updates one independent producer of work that needs the foreground service. */
-        fun setServiceWorkActive(source: DownloadWorkSource, active: Boolean) {
+        internal fun setServiceWorkActive(source: DownloadWorkSource, active: Boolean) {
             synchronized(serviceWorkLock) {
                 serviceWorkTracker.setActive(source, active)
                 if (serviceWorkTracker.hasActiveWork()) startService() else stopService()
