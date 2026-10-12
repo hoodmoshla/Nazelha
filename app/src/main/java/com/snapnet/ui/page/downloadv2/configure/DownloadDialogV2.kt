@@ -471,6 +471,7 @@ fun FormatPage(
         FormatPage(
             modifier = modifier,
             videoInfo = state.info,
+            showAllFormats = state.isSharedIntent,
             onNavigateBack = {
                 scope.launch { sheetState.hide() }.invokeOnCompletion { onDismissRequest() }
             },

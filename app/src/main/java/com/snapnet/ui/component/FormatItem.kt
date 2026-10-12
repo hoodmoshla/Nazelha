@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.wrapContentHeight
@@ -208,41 +209,45 @@ fun SuggestedFormatItem(
     selected: Boolean = false,
     onClick: () -> Unit = {},
 ) {
-    val requestedFormats =
-        videoInfo.requestedFormats
-            ?: videoInfo.requestedDownloads?.map { it.toFormat() }
-            ?: emptyList()
-    val duration = videoInfo.duration ?: 0.0
-
+    val requestedFormats = videoInfo.requestedFormatList()
     val containsVideo = requestedFormats.any { it.containsVideo() }
-    val containsAudio = requestedFormats.any { it.containsVideo() }
+    val containsAudio = requestedFormats.any { it.containsAudio() }
+    val unknownFormat = stringResource(R.string.unknown)
+    val title =
+        requestedFormats.joinToString(separator = " + ") {
+            it.format?.takeIf(String::isNotBlank) ?: it.formatId ?: unknownFormat
+        }
 
-    val title = requestedFormats.joinToString(separator = " + ") { it.format.toString() }
-
+    val sizes = requestedFormats.map { it.fileSize ?: it.fileSizeApprox }
     val totalFileSize =
-        requestedFormats.fold(initial = 0.0) { acc: Double, format: Format ->
-            acc +
-                (format.fileSize ?: format.fileSizeApprox ?: (duration * (format.tbr ?: 0.0) * 125))
-            // kbps -> bytes 1000/8
-        }
-    val fileSizeText = totalFileSize.toFileSizeText()
-
-    val totalTbr =
-        requestedFormats.fold(initial = 0.0) { acc: Double, format: Format ->
-            acc + (format.tbr ?: 0.0)
+        sizes.takeIf { it.isNotEmpty() && it.all { size -> size != null } }?.sumOf { it!! }
+    val isApproximateSize =
+        requestedFormats.any { it.fileSize == null && it.fileSizeApprox != null }
+    val fileSizeText =
+        totalFileSize?.toFileSizeText()?.let {
+            stringResource(R.string.format_size_value, if (isApproximateSize) "≈ $it" else it)
         }
 
-    val tbrText = totalTbr.toBitrateText()
+    val bitrates = requestedFormats.map { it.tbr ?: it.vbr ?: it.abr }
+    val totalBitrate =
+        bitrates.takeIf { it.isNotEmpty() && it.all { bitrate -> bitrate != null } }?.sumOf { it!! }
+    val bitrateText =
+        totalBitrate?.toBitrateText()?.takeIf(String::isNotBlank)?.let {
+            stringResource(R.string.format_bitrate_value, it)
+        }
+    val firstLineText = listOfNotNull(fileSizeText, bitrateText).joinToString(" · ")
 
-    val firstLineText = connectWithDelimiter(fileSizeText, tbrText, delimiter = " ")
-
-    val vcodecText = videoInfo.vcodec?.substringBefore(delimiter = ".") ?: ""
-    val acodecText = videoInfo.acodec?.substringBefore(delimiter = ".") ?: ""
-
-    val codecText =
-        connectWithBlank(vcodecText, acodecText).run { if (isNotBlank()) "($this)" else this }
-
-    val secondLineText = connectWithDelimiter(videoInfo.ext, codecText, delimiter = " ").uppercase()
+    val secondLineText =
+        requestedFormats
+            .mapNotNull { format ->
+                val videoCodec = format.vcodec?.takeUnless { it == "none" }?.substringBefore('.')
+                val audioCodec = format.acodec?.takeUnless { it == "none" }?.substringBefore('.')
+                val codecs = connectWithBlank(videoCodec.orEmpty(), audioCodec.orEmpty())
+                connectWithDelimiter(format.ext?.uppercase(), codecs, delimiter = " ")
+                    .takeIf(String::isNotBlank)
+            }
+            .distinct()
+            .joinToString(" + ")
 
     FormatItem(
         modifier = modifier,
@@ -260,7 +265,6 @@ fun SuggestedFormatItem(
 fun FormatItem(
     modifier: Modifier = Modifier,
     formatInfo: Format,
-    duration: Double,
     selected: Boolean = false,
     outlineColor: Color = MaterialTheme.colorScheme.primary,
     containerColor: Color = MaterialTheme.colorScheme.primaryContainer,
@@ -269,30 +273,31 @@ fun FormatItem(
 ) {
 
     with(formatInfo) {
-        val vcodecText = vcodec?.substringBefore(delimiter = ".") ?: ""
-        val acodecText = acodec?.substringBefore(delimiter = ".") ?: ""
+        val vcodecText = vcodec?.takeUnless { it == "none" }?.substringBefore(delimiter = ".") ?: ""
+        val acodecText = acodec?.takeUnless { it == "none" }?.substringBefore(delimiter = ".") ?: ""
 
         val codec =
             connectWithBlank(vcodecText, acodecText).run { if (isNotBlank()) "($this)" else this }
 
-        val tbrText =
-            when {
-                tbr == null -> "" // i don't care
-                tbr < 1024f -> "%.1f Kbps".format(tbr)
-
-                else -> "%.2f Mbps".format(tbr / 1024f)
+        val fileSizeText =
+            (fileSize ?: fileSizeApprox)?.toFileSizeText()?.let {
+                stringResource(R.string.format_size_value, if (fileSize == null) "≈ $it" else it)
             }
+        val bitrateText =
+            tbr?.toBitrateText()?.takeIf(String::isNotBlank)?.let {
+                stringResource(R.string.format_bitrate_value, it)
+            }
+        val firstLineText = listOfNotNull(fileSizeText, bitrateText).joinToString(" · ")
 
-        val fileSize = fileSize ?: fileSizeApprox ?: (tbr?.times(duration * 125))
-        val fileSizeText = fileSize.toFileSizeText()
-
-        val firstLineText = connectWithDelimiter(fileSizeText, tbrText, delimiter = " ")
-
-        val secondLineText = connectWithDelimiter(ext, codec, delimiter = " ").uppercase()
+        val secondLineText = connectWithDelimiter(ext?.uppercase(), codec, delimiter = " · ")
 
         FormatItem(
             modifier = modifier,
-            title = format.toString(),
+            title =
+                format?.takeIf(String::isNotBlank)
+                    ?: connectWithDelimiter(formatId, resolution, delimiter = " · ").ifBlank {
+                        stringResource(R.string.unknown)
+                    },
             containsAudio = formatInfo.containsAudio(),
             containsVideo = formatInfo.containsVideo(),
             firstLineText = firstLineText,
@@ -346,6 +351,8 @@ fun FormatItem(
     Box(
         modifier =
             modifier
+                .fillMaxWidth()
+                .heightIn(min = 76.dp)
                 .clip(MaterialTheme.shapes.medium)
                 .selectable(selected = selected) { onClick() }
                 .combinedClickable(
@@ -354,60 +361,72 @@ fun FormatItem(
                     onLongClickLabel = stringResource(R.string.copy_link),
                 )
                 .border(
-                    width = 1.dp,
+                    width = if (selected) 2.dp else 1.dp,
                     color = animatedOutlineColor,
                     shape = MaterialTheme.shapes.medium,
                 )
                 .background(animatedContainerColor)
     ) {
-        Column(Modifier.padding(12.dp), horizontalAlignment = Alignment.Start) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.titleSmall,
-                minLines = 2,
-                maxLines = 2,
-                color = animatedTitleColor,
-                overflow = TextOverflow.Clip,
-            )
-
-            Text(
-                text = firstLineText,
-                style = MaterialTheme.typography.labelMedium,
-                modifier = Modifier.padding(top = 6.dp),
-                color = MaterialTheme.colorScheme.onSurface,
-                maxLines = 2,
-            )
-
-            Text(
-                text = secondLineText,
-                style = MaterialTheme.typography.labelMedium,
-                modifier = Modifier.padding(top = 2.dp),
-                color = MaterialTheme.colorScheme.onSurface,
-                maxLines = 1,
-            )
-        }
-        Row(modifier = Modifier.padding(bottom = 6.dp, end = 6.dp).align(Alignment.BottomEnd)) {
-            if (containsVideo)
-                Icon(
-                    imageVector = Icons.Rounded.Videocam,
-                    tint = outlineColor,
-                    contentDescription = stringResource(id = R.string.video),
-                    modifier = Modifier.size(16.dp),
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleSmall,
+                    maxLines = 2,
+                    color = animatedTitleColor,
+                    overflow = TextOverflow.Ellipsis,
                 )
-            if (containsAudio)
-                Icon(
-                    imageVector = Icons.Rounded.Audiotrack,
-                    tint = outlineColor,
-                    contentDescription = stringResource(id = R.string.audio),
-                    modifier = Modifier.size(16.dp),
-                )
-            if (!containsVideo && !containsAudio) {
-                Icon(
-                    imageVector = Icons.Rounded.QuestionMark,
-                    tint = outlineColor,
-                    contentDescription = stringResource(id = R.string.unknown),
-                    modifier = Modifier.size(16.dp),
-                )
+                if (firstLineText.isNotBlank()) {
+                    Text(
+                        text = firstLineText,
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.padding(top = 4.dp),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+                if (secondLineText.isNotBlank()) {
+                    Text(
+                        text = secondLineText,
+                        style = MaterialTheme.typography.labelSmall,
+                        modifier = Modifier.padding(top = 2.dp),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
+            Row(
+                modifier = Modifier.padding(start = 12.dp),
+                horizontalArrangement = Arrangement.spacedBy(2.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                if (containsVideo)
+                    Icon(
+                        imageVector = Icons.Rounded.Videocam,
+                        tint = outlineColor,
+                        contentDescription = stringResource(id = R.string.video),
+                        modifier = Modifier.size(18.dp),
+                    )
+                if (containsAudio)
+                    Icon(
+                        imageVector = Icons.Rounded.Audiotrack,
+                        tint = outlineColor,
+                        contentDescription = stringResource(id = R.string.audio),
+                        modifier = Modifier.size(18.dp),
+                    )
+                if (!containsVideo && !containsAudio) {
+                    Icon(
+                        imageVector = Icons.Rounded.QuestionMark,
+                        tint = outlineColor,
+                        contentDescription = stringResource(id = R.string.unknown),
+                        modifier = Modifier.size(18.dp),
+                    )
+                }
             }
         }
     }
@@ -428,7 +447,7 @@ fun PreviewFormat() {
             Column() {
                 //                FormatSubtitle(text = stringResource(R.string.video_only))
                 LazyVerticalGrid(
-                    columns = GridCells.Adaptive(150.dp),
+                    columns = GridCells.Fixed(1),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
@@ -553,5 +572,5 @@ fun FormatSubtitle(
 @Preview
 @Composable
 fun FormatItemPreview() {
-    FormatItem(formatInfo = Format(), duration = 20.0)
+    FormatItem(formatInfo = Format())
 }

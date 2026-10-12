@@ -40,6 +40,26 @@ private const val TAG = "QuickDownloadActivity"
 
 class QuickDownloadActivity : ComponentActivity() {
     private var sharedUrlCached: String = ""
+    private lateinit var viewModel: DownloadDialogViewModel
+
+    private fun openSharedUrl(url: String) {
+        val preferences =
+            DownloadUtil.DownloadPreferences.createFromPreferences().copy(extractAudio = false)
+        viewModel.postAction(
+            Action.FetchPlaylist(url = url, preferences = preferences, isSharedIntent = true)
+        )
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        val sharedUrl = intent.getSharedURL() ?: return
+        sharedUrlCached = sharedUrl
+        if (::viewModel.isInitialized) {
+            viewModel.postAction(Action.Reset)
+            openSharedUrl(sharedUrl)
+        }
+    }
 
     private fun Intent.getSharedURL(): String? {
         val intent = this
@@ -69,6 +89,7 @@ class QuickDownloadActivity : ComponentActivity() {
 
         if (sharedUrlCached.isEmpty()) {
             finish()
+            return
         }
 
         App.startService()
@@ -81,19 +102,14 @@ class QuickDownloadActivity : ComponentActivity() {
                 WindowManager.LayoutParams.MATCH_PARENT,
                 WindowManager.LayoutParams.MATCH_PARENT,
             )
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                setType(WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY)
-            } else {
-                setType(WindowManager.LayoutParams.TYPE_SYSTEM_ALERT)
-            }
         }
 
         if (Build.VERSION.SDK_INT < 33) {
             runBlocking { setLanguage(PreferenceUtil.getLocaleFromPreference()) }
         }
 
-        val viewModel: DownloadDialogViewModel = getViewModel()
-        viewModel.postAction(Action.ShowSheet(listOf(sharedUrlCached)))
+        viewModel = getViewModel()
+        openSharedUrl(sharedUrlCached)
 
         setContent {
             SettingsProvider(calculateWindowSizeClass(this).widthSizeClass) {

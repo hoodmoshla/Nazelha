@@ -28,6 +28,10 @@
     <string name="release_desc">ألق نظرة على الإصدارات الجديدة وسجل التغييرات</string>
     <string name="release">أحدث إصدار</string>
     <string name="video">فيديو</string>
+    <string name="video_with_audio">فيديو مع صوت</string>
+    <string name="audio_only_format">الصوت فقط</string>
+    <string name="format_size_value">الحجم: %1$s</string>
+    <string name="format_bitrate_value">معدل البت: %1$s</string>
     <string name="checked">محدد</string>
     <string name="custom_command_template">قالب الأوامر</string>
     <string name="edit">تحرير</string>

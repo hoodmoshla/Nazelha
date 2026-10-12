@@ -14,6 +14,7 @@ import com.snapnet.ui.common.SettingsProvider
 import com.snapnet.ui.page.AppEntry
 import com.snapnet.ui.page.downloadv2.configure.DownloadDialogViewModel
 import com.snapnet.ui.theme.SealTheme
+import com.snapnet.util.DownloadUtil
 import com.snapnet.util.PreferenceUtil
 import com.snapnet.util.matchUrlFromSharedText
 import com.snapnet.util.setLanguage
@@ -72,13 +73,21 @@ class MainActivity : AppCompatActivity() {
     }
 
     /**
-     * Extracts a link from a share/view intent and opens the same download dialog that the quick
-     * download activity uses. Does nothing when there is no usable link, so the app never opens an
-     * empty sheet.
+     * Extracts a link from a share/view intent and fetches its media information immediately. Video
+     * links go straight to format selection; playlist links keep their existing chooser. Does
+     * nothing when there is no usable link, so the app never opens an empty sheet.
      */
     private fun handleShareIntent(intent: Intent?) {
         val url = intent?.getSharedURL() ?: return
-        dialogViewModel.postAction(DownloadDialogViewModel.Action.ShowSheet(listOf(url)))
+        dialogViewModel.postAction(
+            DownloadDialogViewModel.Action.FetchPlaylist(
+                url = url,
+                preferences =
+                    DownloadUtil.DownloadPreferences.createFromPreferences()
+                        .copy(extractAudio = false),
+                isSharedIntent = true,
+            )
+        )
     }
 
     /**

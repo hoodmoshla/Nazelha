@@ -9,6 +9,7 @@ import com.snapnet.util.DownloadUtil
 import com.snapnet.util.PlaylistResult
 import com.snapnet.util.VideoInfo
 import com.yausername.youtubedl_android.YoutubeDL
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -26,7 +27,8 @@ class DownloadDialogViewModel(private val downloader: DownloaderV2) : ViewModel(
 
         data class PlaylistSelection(val result: PlaylistResult) : SelectionState
 
-        data class FormatSelection(val info: VideoInfo) : SelectionState
+        data class FormatSelection(val info: VideoInfo, val isSharedIntent: Boolean = false) :
+            SelectionState
     }
 
     sealed interface SheetState {
@@ -57,6 +59,7 @@ class DownloadDialogViewModel(private val downloader: DownloaderV2) : ViewModel(
         data class FetchPlaylist(
             val url: String,
             val preferences: DownloadUtil.DownloadPreferences,
+            val isSharedIntent: Boolean = false,
         ) : Action
 
         data class FetchFormats(
@@ -115,8 +118,9 @@ class DownloadDialogViewModel(private val downloader: DownloaderV2) : ViewModel(
     private fun fetchPlaylist(action: Action.FetchPlaylist) {
         val (url, preferences) = action
 
+        mSelectionStateFlow.update { SelectionState.Idle }
         val job =
-            viewModelScope.launch(Dispatchers.IO) {
+            viewModelScope.launch(Dispatchers.IO, start = CoroutineStart.LAZY) {
                 DownloadUtil.getPlaylistOrVideoInfo(
                         playlistURL = url,
                         downloadPreferences = preferences,
@@ -132,7 +136,10 @@ class DownloadDialogViewModel(private val downloader: DownloaderV2) : ViewModel(
 
                                 is VideoInfo -> {
                                     mSelectionStateFlow.update {
-                                        SelectionState.FormatSelection(info = info)
+                                        SelectionState.FormatSelection(
+                                            info = info,
+                                            isSharedIntent = action.isSharedIntent,
+                                        )
                                     }
                                 }
                             }
@@ -144,6 +151,8 @@ class DownloadDialogViewModel(private val downloader: DownloaderV2) : ViewModel(
                     }
             }
         mSheetStateFlow.update { SheetState.Loading(taskKey = "FetchPlaylist_$url", job = job) }
+        mSheetValueFlow.update { SheetValue.Expanded }
+        job.start()
     }
 
     private fun fetchFormat(action: Action.FetchFormats) {

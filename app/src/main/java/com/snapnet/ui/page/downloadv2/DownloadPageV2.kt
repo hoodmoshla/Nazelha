@@ -106,10 +106,10 @@ import com.snapnet.ui.component.SealModalBottomSheet
 import com.snapnet.ui.component.SelectionGroupDefaults
 import com.snapnet.ui.component.SelectionGroupItem
 import com.snapnet.ui.component.SelectionGroupRow
-import com.snapnet.ui.page.downloadv2.configure.DownloadDialogViewModel.Action
 import com.snapnet.ui.page.downloadv2.configure.Config
 import com.snapnet.ui.page.downloadv2.configure.DownloadDialog
 import com.snapnet.ui.page.downloadv2.configure.DownloadDialogViewModel
+import com.snapnet.ui.page.downloadv2.configure.DownloadDialogViewModel.Action
 import com.snapnet.ui.page.downloadv2.configure.FormatPage
 import com.snapnet.ui.page.downloadv2.configure.PlaylistSelectionPage
 import com.snapnet.ui.page.downloadv2.configure.PreferencesMock

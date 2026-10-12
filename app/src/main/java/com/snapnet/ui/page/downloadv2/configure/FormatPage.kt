@@ -128,10 +128,11 @@ fun FormatPage(
     modifier: Modifier = Modifier,
     videoInfo: VideoInfo,
     downloader: DownloaderV2 = koinInject(),
+    showAllFormats: Boolean = false,
     onNavigateBack: () -> Unit = {},
 ) {
     if (videoInfo.formats.isNullOrEmpty()) return
-    val audioOnly = EXTRACT_AUDIO.getBoolean()
+    val audioOnly = EXTRACT_AUDIO.getBoolean() && !showAllFormats
     val mergeAudioStream = MERGE_MULTI_AUDIO_STREAM.getBoolean()
     val subtitleLanguageRegex = SUBTITLE_LANGUAGE.getString()
     val downloadSubtitle = SUBTITLE.getBoolean()
@@ -295,27 +296,44 @@ private fun FormatPageImpl(
     val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
 
     if (videoInfo.formats.isNullOrEmpty()) return
+    val previewDuration = videoInfo.duration?.roundToInt() ?: 0
     val videoOnlyFormats =
-        videoInfo.formats.filter { it.vcodec != "none" && it.acodec == "none" }.reversed()
+        videoInfo.formats
+            .filter { it.containsVideo() && !it.containsAudio() }
+            .sortedWith(
+                compareByDescending<Format> {
+                        it.height ?: it.resolution?.substringAfterLast('x')?.toDoubleOrNull() ?: 0.0
+                    }
+                    .thenByDescending { it.width ?: 0.0 }
+                    .thenByDescending { it.tbr ?: it.vbr ?: 0.0 }
+            )
     val audioOnlyFormats =
-        videoInfo.formats.filter { it.acodec != "none" && it.vcodec == "none" }.reversed()
+        videoInfo.formats
+            .filter { it.containsAudio() && !it.containsVideo() }
+            .sortedWith(compareByDescending<Format> { it.tbr ?: it.abr ?: 0.0 })
     val videoAudioFormats =
-        videoInfo.formats.filter { it.acodec != "none" && it.vcodec != "none" }.reversed()
-
-    val duration = videoInfo.duration ?: 0.0
+        videoInfo.formats
+            .filter { it.containsAudio() && it.containsVideo() }
+            .sortedWith(
+                compareByDescending<Format> {
+                        it.height ?: it.resolution?.substringAfterLast('x')?.toDoubleOrNull() ?: 0.0
+                    }
+                    .thenByDescending { it.width ?: 0.0 }
+                    .thenByDescending { it.tbr ?: it.vbr ?: 0.0 }
+            )
 
     var videoOnlyItemLimit by remember { mutableIntStateOf(6) }
     var audioOnlyItemLimit by remember { mutableIntStateOf(6) }
     var videoAudioItemLimit by remember { mutableIntStateOf(6) }
 
-    val isSuggestedFormatAvailable =
-        !videoInfo.requestedFormats.isNullOrEmpty() || !videoInfo.requestedDownloads.isNullOrEmpty()
+    val suggestedFormats = remember(videoInfo) { videoInfo.requestedFormatList() }
+    val isSuggestedFormatAvailable = suggestedFormats.isNotEmpty()
 
-    var isSuggestedFormatSelected by remember { mutableStateOf(isSuggestedFormatAvailable) }
+    var isSuggestedFormatSelected by remember(videoInfo) { mutableStateOf(false) }
 
-    var selectedVideoAudioFormat by remember { mutableIntStateOf(NOT_SELECTED) }
-    var selectedVideoOnlyFormat by remember { mutableIntStateOf(NOT_SELECTED) }
-    val selectedAudioOnlyFormats = remember { mutableStateListOf<Int>() }
+    var selectedVideoAudioFormat by remember(videoInfo) { mutableIntStateOf(NOT_SELECTED) }
+    var selectedVideoOnlyFormat by remember(videoInfo) { mutableIntStateOf(NOT_SELECTED) }
+    val selectedAudioOnlyFormats = remember(videoInfo) { mutableStateListOf<Int>() }
     val context = LocalContext.current
 
     val uriHandler = LocalUriHandler.current
@@ -363,32 +381,29 @@ private fun FormatPageImpl(
 
     val lazyGridState = rememberLazyGridState()
 
-    val formatList: List<Format> by remember {
-        derivedStateOf {
-            mutableListOf<Format>().apply {
-                if (isSuggestedFormatSelected) {
-                    videoInfo.requestedFormats?.let { addAll(it) }
-                        ?: videoInfo.requestedDownloads?.forEach {
-                            it.requestedFormats?.let { addAll(it) }
+    val formatList: List<Format> by
+        remember(videoInfo, suggestedFormats) {
+            derivedStateOf {
+                mutableListOf<Format>().apply {
+                    if (isSuggestedFormatSelected) {
+                        addAll(suggestedFormats)
+                    } else {
+                        selectedAudioOnlyFormats.forEach { index ->
+                            add(audioOnlyFormats.elementAt(index))
                         }
-                } else {
-                    selectedAudioOnlyFormats.forEach { index ->
-                        add(audioOnlyFormats.elementAt(index))
+                        videoAudioFormats.getOrNull(selectedVideoAudioFormat)?.let { add(it) }
+                        videoOnlyFormats.getOrNull(selectedVideoOnlyFormat)?.let { add(it) }
                     }
-                    videoAudioFormats.getOrNull(selectedVideoAudioFormat)?.let { add(it) }
-                    videoOnlyFormats.getOrNull(selectedVideoOnlyFormat)?.let { add(it) }
                 }
             }
         }
-    }
 
     val isFabExpanded by remember { derivedStateOf { lazyGridState.firstVisibleItemIndex > 0 } }
 
-    val selectedSubtitles = remember {
-        mutableStateListOf<String>().apply { addAll(selectedSubtitleCodes) }
-    }
+    val selectedSubtitles =
+        remember(videoInfo) { mutableStateListOf<String>().apply { addAll(selectedSubtitleCodes) } }
 
-    val selectedAutoCaptions = remember { mutableStateListOf<String>() }
+    val selectedAutoCaptions = remember(videoInfo) { mutableStateListOf<String>() }
 
     Scaffold(
         modifier = modifier.fillMaxSize().nestedScroll(scrollBehavior.nestedScrollConnection),
@@ -446,7 +461,7 @@ private fun FormatPageImpl(
             state = lazyGridState,
             verticalArrangement = Arrangement.spacedBy(8.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
-            columns = GridCells.Adaptive(150.dp),
+            columns = GridCells.Fixed(1),
             contentPadding = PaddingValues(8.dp),
         ) {
             videoInfo.run {
@@ -454,9 +469,13 @@ private fun FormatPageImpl(
                     FormatVideoPreview(
                         modifier = Modifier.padding(horizontal = 8.dp),
                         title = videoTitle.ifEmpty { title },
-                        author = uploader ?: channel ?: uploaderId.toString(),
+                        author =
+                            uploader?.takeIf { it.isNotBlank() }
+                                ?: channel?.takeIf { it.isNotBlank() }
+                                ?: uploaderId?.takeIf { it.isNotBlank() }
+                                ?: stringResource(R.string.unknown),
                         thumbnailUrl = thumbnail.toHttpsUrl(),
-                        duration = duration.roundToInt(),
+                        duration = previewDuration,
                         isClippingVideo = isClippingVideo,
                         isSplittingVideo = isSplittingVideo,
                         isClippingAvailable = isClippingAvailable,
@@ -615,7 +634,7 @@ private fun FormatPageImpl(
                         modifier = Modifier.padding(top = 16.dp).padding(horizontal = 12.dp),
                     ) {
                         FormatSubtitle(
-                            text = stringResource(R.string.video),
+                            text = stringResource(R.string.video_with_audio),
                             modifier = Modifier.weight(1f).padding(vertical = 4.dp),
                         )
                         ClickableTextAction(
@@ -632,7 +651,6 @@ private fun FormatPageImpl(
                 ) { index, formatInfo ->
                     FormatItem(
                         formatInfo = formatInfo,
-                        duration = duration,
                         selected = selectedVideoAudioFormat == index,
                         onLongClick = { formatInfo.url.share() },
                     ) {
@@ -655,7 +673,7 @@ private fun FormatPageImpl(
                         modifier = Modifier.padding(top = 16.dp).padding(horizontal = 12.dp),
                     ) {
                         FormatSubtitle(
-                            text = stringResource(R.string.audio),
+                            text = stringResource(R.string.audio_only_format),
                             color = MaterialTheme.colorScheme.secondary,
                             modifier = Modifier.weight(1f).padding(vertical = 4.dp),
                         )
@@ -678,7 +696,6 @@ private fun FormatPageImpl(
             ) { index, formatInfo ->
                 FormatItem(
                     formatInfo = formatInfo,
-                    duration = duration,
                     selected = selectedAudioOnlyFormats.contains(index),
                     containerColor = MaterialTheme.colorScheme.secondaryContainer,
                     outlineColor = MaterialTheme.colorScheme.secondary,
@@ -724,7 +741,6 @@ private fun FormatPageImpl(
                 ) { index, formatInfo ->
                     FormatItem(
                         formatInfo = formatInfo,
-                        duration = duration,
                         selected = selectedVideoOnlyFormat == index,
                         containerColor = MaterialTheme.colorScheme.tertiaryContainer,
                         outlineColor = MaterialTheme.colorScheme.tertiary,

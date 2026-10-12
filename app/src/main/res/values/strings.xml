@@ -46,6 +46,10 @@
     <string name="readme_desc">Check the GitHub repository and the README</string>
     <string name="readme" translatable="false">README</string>
     <string name="video">Video</string>
+    <string name="video_with_audio">Video with audio</string>
+    <string name="audio_only_format">Audio only</string>
+    <string name="format_size_value">Size: %1$s</string>
+    <string name="format_bitrate_value">Bitrate: %1$s</string>
     <string name="checked">Checked</string>
     <string name="credits">Credits</string>
     <string name="credits_desc">Credits and libre software</string>

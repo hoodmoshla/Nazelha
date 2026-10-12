@@ -71,7 +71,18 @@ data class VideoInfo(
     @SerialName("requested_formats") val requestedFormats: List<Format>? = null,
     val filename: String? = null,
     @SerialName("_type") val type: String? = null,
-) : YoutubeDLInfo
+) : YoutubeDLInfo {
+    fun requestedFormatList(): List<Format> {
+        requestedFormats
+            ?.takeIf { it.isNotEmpty() }
+            ?.let {
+                return it
+            }
+        return requestedDownloads.orEmpty().flatMap { download ->
+            download.requestedFormats?.takeIf { it.isNotEmpty() } ?: listOf(download.toFormat())
+        }
+    }
+}
 
 @Serializable
 data class Format(
