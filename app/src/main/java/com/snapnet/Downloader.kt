@@ -10,8 +10,6 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import com.snapnet.App.Companion.applicationScope
 import com.snapnet.App.Companion.context
-import com.snapnet.App.Companion.startService
-import com.snapnet.App.Companion.stopService
 import com.snapnet.database.objects.CommandTemplate
 import com.snapnet.util.COMMAND_DIRECTORY
 import com.snapnet.util.DownloadUtil
@@ -115,7 +113,12 @@ object Downloader {
 
         fun onRestart() {
             applicationScope.launch(Dispatchers.IO) {
-                DownloadUtil.executeCommandInBackground(url, template)
+                App.setServiceWorkActive(DownloadWorkSource.LEGACY_COMMAND, true)
+                try {
+                    DownloadUtil.executeCommandInBackground(url, template)
+                } finally {
+                    App.setServiceWorkActive(DownloadWorkSource.LEGACY_COMMAND, false)
+                }
             }
         }
 
@@ -146,7 +149,16 @@ object Downloader {
     )
 
     private var currentJob: Job? = null
+    private var currentDownloadInfo: VideoInfo? = null
+    private var currentDownloadPreferences: DownloadUtil.DownloadPreferences? = null
+    private var pausedDownload: PausedDownload? = null
     private var downloadResultTemp: Result<List<String>> = Result.failure(Exception())
+
+    private data class PausedDownload(
+        val taskId: String,
+        val info: VideoInfo,
+        val preferences: DownloadUtil.DownloadPreferences,
+    )
 
     private val mutableDownloaderState: MutableStateFlow<State> = MutableStateFlow(State.Idle)
     private val mutableTaskState = MutableStateFlow(DownloadTaskItem())
@@ -177,7 +189,7 @@ object Downloader {
                 .combine(mutableQuickDownloadCount) { isRunning, cnt ->
                     if (!isRunning) cnt > 0 else true
                 }
-                .collect { if (it) startService() else stopService() }
+                .collect { App.setServiceWorkActive(DownloadWorkSource.LEGACY_DOWNLOADER, it) }
         }
     }
 
@@ -296,9 +308,9 @@ object Downloader {
     ) {
         currentJob =
             applicationScope.launch(Dispatchers.IO) {
+                updateState(State.FetchingInfo)
                 App.awaitYtDlpReady()
                 App.ensureForegroundServiceReady()
-                updateState(State.FetchingInfo)
                 DownloadUtil.fetchVideoInfoFromUrl(url = url, preferences = preferences)
                     .onFailure {
                         manageDownloadError(
@@ -312,6 +324,17 @@ object Downloader {
                         downloadResultTemp =
                             downloadVideo(videoInfo = info, preferences = preferences)
                     }
+            }.also { job ->
+                job.invokeOnCompletion { cause ->
+                    if (cause != null && cause !is CancellationException && cause !is YoutubeDL.CanceledException) {
+                        manageDownloadError(
+                            th = cause,
+                            url = url,
+                            isFetchingInfo = downloaderState.value is State.FetchingInfo,
+                            isTaskAborted = true,
+                        )
+                    }
+                }
             }
     }
 
@@ -349,9 +372,22 @@ object Downloader {
     ) {
         currentJob =
             applicationScope.launch(Dispatchers.IO) {
+                updateState(State.DownloadingVideo)
                 App.awaitYtDlpReady()
                 App.ensureForegroundServiceReady()
                 downloadResultTemp = downloadVideo(videoInfo = info, preferences = preferences)
+            }.also { job ->
+                job.invokeOnCompletion { cause ->
+                    if (cause != null && cause !is CancellationException && cause !is YoutubeDL.CanceledException) {
+                        manageDownloadError(
+                            th = cause,
+                            url = info.originalUrl?.toString(),
+                            title = info.title,
+                            isFetchingInfo = false,
+                            isTaskAborted = true,
+                        )
+                    }
+                }
             }
     }
 
@@ -378,10 +414,17 @@ object Downloader {
         if (!isDownloadingPlaylist) updateState(State.DownloadingVideo)
         val taskId = videoInfo.id + preferences.hashCode()
         val notificationId = taskId.toNotificationId()
+        currentDownloadInfo = videoInfo
+        currentDownloadPreferences = preferences
         Log.d(TAG, "downloadVideo: id=${videoInfo.id} " + videoInfo.title)
         Log.d(TAG, "notificationId: $notificationId")
 
-        NotificationUtil.notifyProgress(notificationId = notificationId, title = videoInfo.title)
+        NotificationUtil.notifyProgress(
+            notificationId = notificationId,
+            title = videoInfo.title,
+            taskId = taskId,
+            canPause = !isDownloadingPlaylist,
+        )
         return DownloadUtil.downloadVideo(
                 videoInfo = videoInfo,
                 playlistUrl = playlistUrl,
@@ -397,6 +440,7 @@ object Downloader {
                     text = line,
                     title = videoInfo.title,
                     taskId = taskId,
+                    canPause = !isDownloadingPlaylist,
                 )
             }
             .onFailure {
@@ -558,14 +602,65 @@ object Downloader {
         currentJob?.cancel(CancellationException(context.getString(R.string.task_canceled)))
         updateState(State.Idle)
         clearProgressState(isFinished = false)
+        pausedDownload = null
         taskState.value.taskId.run {
             YoutubeDL.destroyProcessById(this)
             NotificationUtil.cancelNotification(this.toNotificationId())
         }
     }
 
+    /** Stops a legacy video download while retaining enough information to resume its partial file. */
+    @Synchronized
+    fun pauseDownload(taskId: String): Boolean {
+        val state = taskState.value
+        if (state.taskId != taskId || downloaderState.value !is State.DownloadingVideo) return false
+        val info = currentDownloadInfo ?: return false
+        val preferences = currentDownloadPreferences ?: return false
+        if (!YoutubeDL.destroyProcessById(taskId)) return false
+
+        pausedDownload = PausedDownload(taskId, info, preferences)
+        currentJob?.cancel(CancellationException(context.getString(R.string.paused)))
+        updateState(State.Idle)
+        clearProgressState(isFinished = false)
+        return true
+    }
+
+    /** Cancels a legacy task addressed by its notification task id. */
+    @Synchronized
+    fun cancelDownload(taskId: String): Boolean {
+        if (taskState.value.taskId != taskId) return false
+        if (pausedDownload?.taskId == taskId) {
+            pausedDownload = null
+            updateState(State.Idle)
+            clearProgressState(isFinished = false)
+            return true
+        }
+        pausedDownload = null
+        if (!YoutubeDL.destroyProcessById(taskId)) return false
+        currentJob?.cancel(CancellationException(context.getString(R.string.task_canceled)))
+        updateState(State.Idle)
+        clearProgressState(isFinished = false)
+        return true
+    }
+
+    /** Restarts a paused legacy video using yt-dlp's partial-download resume behavior. */
+    @Synchronized
+    fun resumeDownload(taskId: String): Boolean {
+        val paused = pausedDownload?.takeIf { it.taskId == taskId } ?: return false
+        pausedDownload = null
+        downloadVideoWithInfo(info = paused.info, preferences = paused.preferences)
+        return true
+    }
+
     fun executeCommandWithUrl(url: String) =
-        applicationScope.launch(Dispatchers.IO) { DownloadUtil.executeCommandInBackground(url) }
+        applicationScope.launch(Dispatchers.IO) {
+            App.setServiceWorkActive(DownloadWorkSource.LEGACY_COMMAND, true)
+            try {
+                DownloadUtil.executeCommandInBackground(url)
+            } finally {
+                App.setServiceWorkActive(DownloadWorkSource.LEGACY_COMMAND, false)
+            }
+        }
 
     fun openDownloadResult() {
         if (taskState.value.progress == 100f) FileUtil.openFileFromResult(downloadResultTemp)

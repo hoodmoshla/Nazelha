@@ -7,6 +7,7 @@ import android.content.Intent
 import android.util.Log
 import com.snapnet.App.Companion.context
 import com.snapnet.download.DownloaderV2
+import com.snapnet.download.Task.DownloadState.Running
 import com.snapnet.util.NotificationUtil
 import com.snapnet.util.ToastUtil
 import com.yausername.youtubedl_android.YoutubeDL
@@ -47,12 +48,27 @@ class NotificationActionReceiver : BroadcastReceiver(), KoinComponent {
                 val taskId = intent.getStringExtra(TASK_ID_KEY)
                 if (!taskId.isNullOrEmpty()) {
                     val task = downloader.getTaskStateMap().keys.find { it.id == taskId }
+                    val taskState = task?.let { downloader.getTaskStateMap()[it] }
+                    val runningState = taskState?.downloadState as? Running
                     if (task != null && downloader.pause(task)) {
                         NotificationUtil.notifyPaused(
-                            title = task.url,
+                            title = taskState?.viewState?.title ?: task.url,
                             notificationId = notificationId,
                             taskId = taskId,
+                            progress = ((runningState?.progress ?: 0f) * 100).toInt(),
+                            text = runningState?.progressText,
                         )
+                    } else {
+                        val legacyState = Downloader.taskState.value
+                        if (Downloader.pauseDownload(taskId)) {
+                            NotificationUtil.notifyPaused(
+                                title = legacyState.title,
+                                notificationId = notificationId,
+                                taskId = taskId,
+                                progress = legacyState.progress.toInt(),
+                                text = legacyState.progressText,
+                            )
+                        }
                     }
                 }
             }
@@ -60,8 +76,9 @@ class NotificationActionReceiver : BroadcastReceiver(), KoinComponent {
             ACTION_RESUME_TASK -> {
                 val taskId = intent.getStringExtra(TASK_ID_KEY)
                 if (!taskId.isNullOrEmpty()) {
-                    NotificationUtil.cancelNotification(notificationId)
-                    Log.d(TAG, "resume($taskId) -> ${downloader.restart(taskId)}")
+                    val resumed = downloader.restart(taskId) || Downloader.resumeDownload(taskId)
+                    if (resumed) NotificationUtil.cancelNotification(notificationId)
+                    Log.d(TAG, "resume($taskId) -> $resumed")
                 }
             }
 
@@ -74,9 +91,10 @@ class NotificationActionReceiver : BroadcastReceiver(), KoinComponent {
 
     private fun cancelTask(taskId: String?, notificationId: Int) {
         if (taskId.isNullOrEmpty()) return
-        NotificationUtil.cancelNotification(notificationId)
         val res = downloader.cancel(taskId)
-        if (res) {
+        val legacyRes = if (res) false else Downloader.cancelDownload(taskId)
+        NotificationUtil.cancelNotification(notificationId)
+        if (res || legacyRes) {
             Log.d(TAG, "Task (id:$taskId) was killed.")
         } else {
             // todo: reserved for custom commands

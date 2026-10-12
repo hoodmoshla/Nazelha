@@ -7,6 +7,7 @@ import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.snapshots.SnapshotStateMap
 import com.snapnet.App
+import com.snapnet.DownloadWorkSource
 import com.snapnet.R
 import com.snapnet.download.Task.DownloadState
 import com.snapnet.download.Task.DownloadState.Canceled
@@ -29,6 +30,8 @@ import kotlin.collections.component1
 import kotlin.collections.component2
 import kotlin.collections.set
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.SupervisorJob
@@ -121,9 +124,9 @@ class DownloaderV2Impl(private val appContext: Context) : DownloaderV2, KoinComp
         scope.launch(Dispatchers.Default) {
             snapshotFlow
                 .onEach { doYourWork() }
-                .map { it.countRunning() }
+                .map { it.countActiveWork() }
                 .distinctUntilChanged()
-                .collect { if (it > 0) App.startService() else App.stopService() }
+                .collect { App.setServiceWorkActive(DownloadWorkSource.TASK_QUEUE, it) }
         }
 
         scope.launch(Dispatchers.IO) {
@@ -166,6 +169,13 @@ class DownloaderV2Impl(private val appContext: Context) : DownloaderV2, KoinComp
                     state.copy(downloadState = downloadState)
                 }
         taskList.forEach(::enqueue)
+    }
+
+    private fun Map<Task, Task.State>.countActiveWork(): Int = count { (_, state) ->
+        state.downloadState == Idle ||
+            state.downloadState == ReadyWithInfo ||
+            state.downloadState is Running ||
+            state.downloadState is FetchingInfo
     }
 
     private fun Map<Task, Task.State>.countRunning(): Int = count { (_, state) ->
@@ -270,8 +280,7 @@ class DownloaderV2Impl(private val appContext: Context) : DownloaderV2, KoinComp
         val task = this
         val taskInfo = task.type
         val playlistIndex = if (taskInfo is TypeInfo.Playlist) taskInfo.index else null
-        scope
-            .launch(Dispatchers.Default) {
+        val job = scope.launch(Dispatchers.Default, start = CoroutineStart.LAZY) {
                 App.awaitYtDlpReady()
                 App.ensureForegroundServiceReady()
                 DownloadUtil.fetchVideoInfoFromUrl(
@@ -298,7 +307,16 @@ class DownloaderV2Impl(private val appContext: Context) : DownloaderV2, KoinComp
                         )
                     }
             }
-            .also { job -> downloadState = FetchingInfo(job = job, taskId = id) }
+        downloadState = FetchingInfo(job = job, taskId = id)
+        job.invokeOnCompletion { cause ->
+            if (cause != null) handleUnexpectedFailure(job, FetchInfo, cause)
+        }
+        NotificationUtil.notifyProgress(
+            notificationId = notificationId,
+            title = viewState.title,
+            taskId = id,
+        )
+        job.start()
     }
 
     private fun Task.download() {
@@ -307,8 +325,7 @@ class DownloaderV2Impl(private val appContext: Context) : DownloaderV2, KoinComp
             execute()
             return
         }
-        scope
-            .launch(Dispatchers.Default) {
+        val job = scope.launch(Dispatchers.Default, start = CoroutineStart.LAZY) {
                 App.awaitYtDlpReady()
                 App.ensureForegroundServiceReady()
                 DownloadUtil.downloadVideo(
@@ -371,7 +388,16 @@ class DownloaderV2Impl(private val appContext: Context) : DownloaderV2, KoinComp
                         )
                     }
             }
-            .also { job -> downloadState = Running(job = job, taskId = id) }
+        downloadState = Running(job = job, taskId = id)
+        job.invokeOnCompletion { cause ->
+            if (cause != null) handleUnexpectedFailure(job, Download, cause)
+        }
+        NotificationUtil.notifyProgress(
+            notificationId = notificationId,
+            title = viewState.title,
+            taskId = id,
+        )
+        job.start()
     }
 
     /**
@@ -450,8 +476,7 @@ class DownloaderV2Impl(private val appContext: Context) : DownloaderV2, KoinComp
         check(downloadState == Idle)
         check(type is TypeInfo.CustomCommand)
         val template = type.template
-        scope
-            .launch {
+        val job = scope.launch(start = CoroutineStart.LAZY) {
                 App.awaitYtDlpReady()
                 App.ensureForegroundServiceReady()
                 DownloadUtil.executeCustomCommandTask(url, id, template, preferences) {
@@ -470,6 +495,7 @@ class DownloaderV2Impl(private val appContext: Context) : DownloaderV2, KoinComp
                                     templateName = template.name,
                                     taskUrl = url,
                                     text = text,
+                                    canPause = true,
                                 )
                             }
                             else -> {}
@@ -500,6 +526,42 @@ class DownloaderV2Impl(private val appContext: Context) : DownloaderV2, KoinComp
                         )
                     }
             }
-            .also { downloadState = Running(job = it, taskId = id) }
+        downloadState = Running(job = job, taskId = id)
+        job.invokeOnCompletion { cause ->
+            if (cause != null) handleUnexpectedFailure(job, Download, cause)
+        }
+        NotificationUtil.makeNotificationForCustomCommand(
+            notificationId = notificationId,
+            taskId = id,
+            progress = -1,
+            templateName = template.name,
+            taskUrl = url,
+            canPause = true,
+        )
+        job.start()
+    }
+
+    private fun Task.handleUnexpectedFailure(
+        job: kotlinx.coroutines.Job,
+        action: Task.RestartableAction,
+        cause: Throwable,
+    ) {
+        if (cause is CancellationException || cause is YoutubeDL.CanceledException) return
+        val currentState = taskStateMap[this]?.downloadState ?: return
+        val jobIsStillCurrent =
+            when (currentState) {
+                is FetchingInfo -> currentState.job === job
+                is Running -> currentState.job === job
+                else -> false
+            }
+        if (!jobIsStillCurrent) return
+
+        downloadState = Error(throwable = cause, action = action)
+        NotificationUtil.notifyError(
+            title = viewState.title,
+            textId = if (action == FetchInfo) R.string.download_error_msg else R.string.fetch_info_error_msg,
+            notificationId = notificationId,
+            report = cause.stackTraceToString(),
+        )
     }
 }

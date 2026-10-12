@@ -74,10 +74,12 @@ object NotificationUtil {
         progress: Int = PROGRESS_INITIAL,
         taskId: String? = null,
         text: String? = null,
+        canPause: Boolean = true,
     ) {
         if (!NOTIFICATION.getBoolean()) return
+        val notificationState = DownloadNotificationPolicy.active(taskId != null, canPause)
         val pendingIntent =
-            taskId?.let {
+            taskId?.takeIf { DownloadNotificationAction.CANCEL in notificationState.actions }?.let {
                 Intent(context.applicationContext, NotificationActionReceiver::class.java)
                     .putExtra(TASK_ID_KEY, taskId)
                     .putExtra(NOTIFICATION_ID_KEY, notificationId)
@@ -87,14 +89,14 @@ object NotificationUtil {
                             context.applicationContext,
                             notificationId,
                             this,
-                            PendingIntent.FLAG_ONE_SHOT or PendingIntent.FLAG_IMMUTABLE,
+                            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
                         )
                     }
             }
 
         // "Pause" stops the process but keeps the partial file so the task can be resumed.
         val pausePendingIntent =
-            taskId?.let {
+            taskId?.takeIf { DownloadNotificationAction.PAUSE in notificationState.actions }?.let {
                 Intent(context.applicationContext, NotificationActionReceiver::class.java)
                     .putExtra(TASK_ID_KEY, taskId)
                     .putExtra(NOTIFICATION_ID_KEY, notificationId)
@@ -104,7 +106,7 @@ object NotificationUtil {
                             context.applicationContext,
                             notificationId + 1,
                             this,
-                            PendingIntent.FLAG_ONE_SHOT or PendingIntent.FLAG_IMMUTABLE,
+                            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
                         )
                     }
             }
@@ -114,7 +116,7 @@ object NotificationUtil {
             .setContentTitle(title)
             .setContentText(text)
             .setProgress(PROGRESS_MAX, progress, progress <= 0)
-            .setOngoing(true)
+            .setOngoing(notificationState.ongoing)
             .setOnlyAlertOnce(true)
             .setStyle(NotificationCompat.BigTextStyle().bigText(text))
             .run {
@@ -142,6 +144,7 @@ object NotificationUtil {
         text: String? = null,
     ) {
         if (!NOTIFICATION.getBoolean()) return
+        val notificationState = DownloadNotificationPolicy.paused()
         val resumePendingIntent =
             Intent(context.applicationContext, NotificationActionReceiver::class.java)
                 .putExtra(TASK_ID_KEY, taskId)
@@ -152,7 +155,7 @@ object NotificationUtil {
                         context.applicationContext,
                         notificationId + 2,
                         this,
-                        PendingIntent.FLAG_ONE_SHOT or PendingIntent.FLAG_IMMUTABLE,
+                        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
                     )
                 }
 
@@ -161,7 +164,7 @@ object NotificationUtil {
             .setContentTitle(title)
             .setContentText(context.getString(R.string.paused))
             .setProgress(PROGRESS_MAX, progress, false)
-            .setOngoing(false)
+            .setOngoing(notificationState.ongoing)
             .setAutoCancel(false)
             .addAction(android.R.drawable.ic_media_play, context.getString(R.string.resume), resumePendingIntent)
             .run {
@@ -179,12 +182,13 @@ object NotificationUtil {
         Log.d(TAG, "finishNotification: ")
         notificationManager.cancel(notificationId)
         if (!NOTIFICATION.getBoolean()) return
+        val notificationState = DownloadNotificationPolicy.completed()
 
         val builder =
             NotificationCompat.Builder(context, CHANNEL_ID)
                 .setSmallIcon(R.drawable.ic_stat_seal)
                 .setContentText(text)
-                .setOngoing(false)
+                .setOngoing(notificationState.ongoing)
                 .setAutoCancel(true)
         title?.let { builder.setContentTitle(title) }
         intent?.let { builder.setContentIntent(intent) }
@@ -282,8 +286,25 @@ object NotificationUtil {
         text: String? = null,
         templateName: String,
         taskUrl: String,
+        canPause: Boolean = false,
     ) {
         if (!NOTIFICATION.getBoolean()) return
+        val notificationState = DownloadNotificationPolicy.active(hasTaskId = true, canPause = canPause)
+
+        val pausePendingIntent =
+            if (DownloadNotificationAction.PAUSE in notificationState.actions) {
+                val pauseIntent =
+                    Intent(context.applicationContext, NotificationActionReceiver::class.java)
+                        .putExtra(TASK_ID_KEY, taskId)
+                        .putExtra(NOTIFICATION_ID_KEY, notificationId)
+                        .putExtra(ACTION_KEY, ACTION_PAUSE_TASK)
+                PendingIntent.getBroadcast(
+                    context.applicationContext,
+                    notificationId + 1,
+                    pauseIntent,
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+                )
+            } else null
 
         val intent =
             Intent(context.applicationContext, NotificationActionReceiver::class.java)
@@ -296,7 +317,7 @@ object NotificationUtil {
                 context.applicationContext,
                 notificationId,
                 intent,
-                PendingIntent.FLAG_ONE_SHOT or PendingIntent.FLAG_IMMUTABLE,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
             )
 
         NotificationCompat.Builder(context, CHANNEL_ID)
@@ -306,14 +327,19 @@ object NotificationUtil {
                     context.getString(R.string.execute_command_notification)
             )
             .setContentText(text)
-            .setOngoing(true)
+            .setOngoing(notificationState.ongoing)
             .setProgress(PROGRESS_MAX, progress, progress == -1)
-            .addAction(
-                R.drawable.outline_cancel_24,
-                context.getString(R.string.cancel),
-                pendingIntent,
-            )
-            .run { notificationManager.notify(notificationId, build()) }
+            .run {
+                pausePendingIntent?.let {
+                    addAction(android.R.drawable.ic_media_pause, context.getString(R.string.pause), it)
+                }
+                addAction(
+                    R.drawable.outline_cancel_24,
+                    context.getString(R.string.cancel),
+                    pendingIntent,
+                )
+                notificationManager.notify(notificationId, build())
+            }
     }
 
     fun cancelAllNotifications() {

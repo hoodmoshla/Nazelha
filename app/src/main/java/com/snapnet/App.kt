@@ -95,7 +95,7 @@ class App : Application() {
         registerActivityLifecycleCallbacks(
             object : ActivityLifecycleCallbacks {
                 override fun onActivityStarted(activity: Activity) {
-                    if (wantsService && !isServiceRunning) {
+                    if (wantsService && serviceWorkTracker.hasActiveWork() && !isServiceRunning) {
                         Log.i(TAG, "retrying the download foreground service now that the app is visible")
                         startService()
                     }
@@ -177,6 +177,8 @@ class App : Application() {
         /** Binder handle to the running service, used to tear it down cleanly. */
         private var boundService: DownloadService? = null
         @Volatile private var foregroundReady: CompletableDeferred<Unit>? = null
+        private val serviceWorkTracker = DownloadServiceWorkTracker()
+        private val serviceWorkLock = Any()
 
         /**
          * True while a download is in flight and the service therefore ought to be running.
@@ -250,6 +252,14 @@ class App : Application() {
                     "download foreground service could not be started; the running download will not survive being backgrounded until the app is shown again",
                     e,
                 )
+            }
+        }
+
+        /** Updates one independent producer of work that needs the foreground service. */
+        fun setServiceWorkActive(source: DownloadWorkSource, active: Boolean) {
+            synchronized(serviceWorkLock) {
+                serviceWorkTracker.setActive(source, active)
+                if (serviceWorkTracker.hasActiveWork()) startService() else stopService()
             }
         }
 

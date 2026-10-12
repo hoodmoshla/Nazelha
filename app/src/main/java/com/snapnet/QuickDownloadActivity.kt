@@ -18,6 +18,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.lifecycleScope
 import com.snapnet.ui.common.LocalDarkTheme
 import com.snapnet.ui.common.SettingsProvider
 import com.snapnet.ui.page.downloadv2.configure.Config
@@ -33,6 +34,10 @@ import com.snapnet.util.PreferenceUtil
 import com.snapnet.util.matchUrlFromSharedText
 import com.snapnet.util.setLanguage
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.runBlocking
 import org.koin.androidx.viewmodel.ext.android.getViewModel
 
@@ -41,13 +46,44 @@ private const val TAG = "QuickDownloadActivity"
 class QuickDownloadActivity : ComponentActivity() {
     private var sharedUrlCached: String = ""
     private lateinit var viewModel: DownloadDialogViewModel
+    private var quickShareWorkJob: Job? = null
+    private var quickShareWorkActive = false
 
     private fun openSharedUrl(url: String) {
+        beginQuickShareWork()
         val preferences =
             DownloadUtil.DownloadPreferences.createFromPreferences().copy(extractAudio = false)
         viewModel.postAction(
             Action.FetchPlaylist(url = url, preferences = preferences, isSharedIntent = true)
         )
+    }
+
+    private fun beginQuickShareWork() {
+        finishQuickShareWork()
+        quickShareWorkActive = true
+        App.setServiceWorkActive(DownloadWorkSource.QUICK_SHARE, true)
+        quickShareWorkJob =
+            lifecycleScope.launch(start = CoroutineStart.UNDISPATCHED) {
+                var observedLoading = false
+                combine(viewModel.sheetStateFlow, viewModel.selectionStateFlow) { sheet, selection ->
+                    sheet to selection
+                }.collect { (state, selection) ->
+                    if (state is DownloadDialogViewModel.SheetState.Loading) {
+                        observedLoading = true
+                    } else if (observedLoading || selection !is SelectionState.Idle) {
+                        finishQuickShareWork()
+                    }
+                }
+            }
+    }
+
+    private fun finishQuickShareWork() {
+        quickShareWorkJob?.cancel()
+        quickShareWorkJob = null
+        if (quickShareWorkActive) {
+            quickShareWorkActive = false
+            App.setServiceWorkActive(DownloadWorkSource.QUICK_SHARE, false)
+        }
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -91,8 +127,6 @@ class QuickDownloadActivity : ComponentActivity() {
             finish()
             return
         }
-
-        App.startService()
 
         enableEdgeToEdge()
 
@@ -181,5 +215,10 @@ class QuickDownloadActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    override fun onDestroy() {
+        finishQuickShareWork()
+        super.onDestroy()
     }
 }
