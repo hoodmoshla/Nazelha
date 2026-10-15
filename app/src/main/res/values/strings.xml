@@ -33,6 +33,7 @@
     <string name="dismiss">Cancel</string>
     <string name="downloads_history">Downloads</string>
     <string name="audio">Audio</string>
+    <string name="music">Music</string>
     <string name="link_copied">Link copied to clipboard</string>
     <string name="open_url">Open link</string>
     <string name="remove">Remove</string>
@@ -65,6 +66,7 @@
     <string name="display_settings">Dark theme, dynamic color, languages</string>
     <string name="dark_theme">Dark theme</string>
     <string name="follow_system">System</string>
+    <string name="dark_theme_follow_system_desc">When System is selected, SnapNet follows your device appearance schedule, including sunset-to-sunrise dark mode when enabled on your device.</string>
     <string name="on">On</string>
     <string name="off">Off</string>
     <string name="pause">Pause</string>
@@ -123,6 +125,8 @@
     <string name="show_more_actions">Show more actions</string>
     <string name="download_notification">Download notification</string>
     <string name="download_notification_desc">"Notify of downloaded files and progress"</string>
+    <string name="download_notification_disabled_desc">Notifications are blocked in Android settings. Tap to open this app’s notification settings.</string>
+    <string name="more_formats">More formats</string>
     <string name="fetching_playlist_info">Fetching playlist info…</string>
     <string name="download_range_selection">Playlist selection</string>
     <string name="download_range_desc">"Specify the range of videos to download from the playlist \"%3$s\" (from %1$d to %2$d)."</string>

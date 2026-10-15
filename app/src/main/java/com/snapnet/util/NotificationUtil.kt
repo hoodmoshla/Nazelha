@@ -347,7 +347,13 @@ object NotificationUtil {
     }
 
     fun areNotificationsEnabled(): Boolean {
-        return if (Build.VERSION.SDK_INT <= 24) true
-        else notificationManager.areNotificationsEnabled()
+        if (Build.VERSION.SDK_INT <= 24) return true
+        if (!notificationManager.areNotificationsEnabled()) return false
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            return notificationManager
+                .getNotificationChannel(CHANNEL_ID)
+                ?.importance != NotificationManager.IMPORTANCE_NONE
+        }
+        return true
     }
 }

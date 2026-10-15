@@ -18,6 +18,7 @@ import androidx.compose.ui.res.stringResource
 import com.snapnet.R
 import com.snapnet.ui.common.LocalDarkTheme
 import com.snapnet.ui.component.BackButton
+import com.snapnet.ui.component.PreferenceInfo
 import com.snapnet.ui.component.PreferenceSingleChoiceItem
 import com.snapnet.ui.component.PreferenceSubtitle
 import com.snapnet.ui.component.PreferenceSwitchVariant
@@ -74,6 +75,10 @@ fun DarkThemePreferences(onNavigateBack: () -> Unit) {
                         PreferenceUtil.modifyDarkThemePreference(OFF)
                     }
                 }
+                if (Build.VERSION.SDK_INT >= 29)
+                    item {
+                        PreferenceInfo(text = stringResource(R.string.dark_theme_follow_system_desc))
+                    }
                 item { PreferenceSubtitle(text = stringResource(R.string.additional_settings)) }
                 item {
                     PreferenceSwitchVariant(

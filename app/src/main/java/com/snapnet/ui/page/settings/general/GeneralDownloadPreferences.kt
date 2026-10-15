@@ -1,7 +1,12 @@
 package com.snapnet.ui.page.settings.general
 
 import android.Manifest
+import android.content.ActivityNotFoundException
+import android.content.Context
+import android.content.Intent
+import android.net.Uri
 import android.os.Build
+import android.provider.Settings
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -49,6 +54,7 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.contentColorFor
 import androidx.compose.material3.rememberTopAppBarState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -65,6 +71,9 @@ import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.PermissionStatus
 import com.google.accompanist.permissions.rememberPermissionState
@@ -80,7 +89,6 @@ import com.snapnet.ui.component.PreferenceSubtitle
 import com.snapnet.ui.component.PreferenceSwitch
 import com.snapnet.ui.component.PreferenceSwitchWithDivider
 import com.snapnet.ui.component.SealDialog
-import com.snapnet.ui.page.download.NotificationPermissionDialog
 import com.snapnet.util.CONFIGURE
 import com.snapnet.util.CUSTOM_COMMAND
 import com.snapnet.util.DEBUG
@@ -106,6 +114,26 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
+private fun openNotificationSettings(context: Context) {
+    val appDetailsIntent =
+        Intent(
+            Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+            Uri.fromParts("package", context.packageName, null),
+        )
+    val notificationSettingsIntent =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+                .putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
+        } else {
+            appDetailsIntent
+        }
+    try {
+        context.startActivity(notificationSettingsIntent)
+    } catch (_: ActivityNotFoundException) {
+        context.startActivity(appDetailsIntent)
+    }
+}
+
 @OptIn(ExperimentalPermissionsApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun GeneralDownloadPreferences(onNavigateBack: () -> Unit, navigateToTemplate: () -> Unit) {
@@ -130,18 +158,21 @@ fun GeneralDownloadPreferences(onNavigateBack: () -> Unit, navigateToTemplate: (
     var isNotificationPermissionGranted by remember {
         mutableStateOf(NotificationUtil.areNotificationsEnabled())
     }
-
-    val notificationPermission =
-        if (Build.VERSION.SDK_INT >= 33)
-            rememberPermissionState(permission = Manifest.permission.POST_NOTIFICATIONS) { status ->
-                if (!status) ToastUtil.makeToast(context.getString(R.string.permission_denied))
-                else isNotificationPermissionGranted = true
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer =
+            LifecycleEventObserver { _, event ->
+                if (event == Lifecycle.Event.ON_RESUME) {
+                    isNotificationPermissionGranted = NotificationUtil.areNotificationsEnabled()
+                    downloadNotification = NOTIFICATION.getBoolean()
+                }
             }
-        else null
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
 
     var useDownloadArchive by DOWNLOAD_ARCHIVE.booleanState
     var showClearArchiveDialog by remember { mutableStateOf(false) }
-    var showNotificationDialog by remember { mutableStateOf(false) }
     var archiveFileContent by remember { mutableStateOf("") }
 
     val storagePermission =
@@ -240,7 +271,7 @@ fun GeneralDownloadPreferences(onNavigateBack: () -> Unit, navigateToTemplate: (
                                 id =
                                     if (isNotificationPermissionGranted)
                                         R.string.download_notification_desc
-                                    else R.string.permission_denied
+                                    else R.string.download_notification_disabled_desc
                             ),
                         icon =
                             if (!isNotificationPermissionGranted) Icons.Outlined.NotificationsOff
@@ -248,9 +279,9 @@ fun GeneralDownloadPreferences(onNavigateBack: () -> Unit, navigateToTemplate: (
                             else Icons.Outlined.NotificationsActive,
                         isChecked = downloadNotification && isNotificationPermissionGranted,
                         onClick = {
-                            if (notificationPermission?.status is PermissionStatus.Denied) {
-                                showNotificationDialog = true
-                            } else if (isNotificationPermissionGranted) {
+                            if (!isNotificationPermissionGranted) {
+                                openNotificationSettings(context)
+                            } else {
                                 if (downloadNotification) NotificationUtil.cancelAllNotifications()
                                 downloadNotification = !downloadNotification
                                 PreferenceUtil.updateValue(NOTIFICATION, downloadNotification)
@@ -412,17 +443,6 @@ fun GeneralDownloadPreferences(onNavigateBack: () -> Unit, navigateToTemplate: (
         }
     }
 
-    if (showNotificationDialog) {
-        NotificationPermissionDialog(
-            onDismissRequest = { showNotificationDialog = false },
-            onPermissionGranted = {
-                notificationPermission?.launchPermissionRequest()
-                NOTIFICATION.updateBoolean(true)
-                downloadNotification = true
-                showNotificationDialog = false
-            },
-        )
-    }
 }
 
 @Composable

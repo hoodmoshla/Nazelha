@@ -456,4 +456,8 @@
     <string name="issue_tracker">متتبع المشكلة</string>
     <string name="issue_tracker_hint">هل واجهت خطًأ؟ قبل الإبلاغ عن مشكلة جديدة، يرجى البحث في أداة تتبع المشاكل لدينا. لقد عولجت العديد من المشاكل الشائعة وتوثيقها بالفعل هناك.</string>
     <string name="media_info">معلومات الوسائط</string>
+    <string name="music">الموسيقى</string>
+    <string name="more_formats">المزيد من الصيغ</string>
+    <string name="download_notification_disabled_desc">إشعارات التطبيق معطّلة في إعدادات Android. اضغط لفتح إعدادات إشعارات التطبيق.</string>
+    <string name="dark_theme_follow_system_desc">عند اختيار «النظام»، يتبع SnapNet مظهر الجهاز وجدولته، بما في ذلك الوضع الداكن من الغروب إلى الشروق إذا كان مفعّلًا على الجهاز.</string>
 </resources>
