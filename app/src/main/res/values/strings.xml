@@ -49,6 +49,7 @@
     <string name="video">Video</string>
     <string name="video_with_audio">Video with audio</string>
     <string name="audio_only_format">Audio only</string>
+    <string name="resolution_unavailable">Resolution unavailable</string>
     <string name="format_size_value">Size: %1$s</string>
     <string name="format_bitrate_value">Bitrate: %1$s</string>
     <string name="checked">Checked</string>

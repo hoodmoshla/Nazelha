@@ -287,14 +287,21 @@ private fun FormatPageImpl(
 
     if (videoInfo.formats.isNullOrEmpty()) return
     val previewDuration = videoInfo.duration?.roundToInt() ?: 0
-    val pickerOptions = remember(videoInfo.formats) { formatPickerOptions(videoInfo.formats.orEmpty()) }
+    val suggestedFormats = remember(videoInfo) { videoInfo.requestedFormatList() }
+    val pickerOptions =
+        remember(videoInfo.formats, suggestedFormats, videoInfo.duration) {
+            formatPickerOptions(
+                formats = videoInfo.formats.orEmpty(),
+                recommendedFormats = suggestedFormats,
+                durationSeconds = videoInfo.duration,
+            )
+        }
     val audioOnlyFormats = pickerOptions.music
     val videoAudioFormats = pickerOptions.video
 
     var audioOnlyItemLimit by remember { mutableIntStateOf(6) }
     var videoAudioItemLimit by remember { mutableIntStateOf(6) }
 
-    val suggestedFormats = remember(videoInfo) { videoInfo.requestedFormatList() }
     val isSuggestedFormatAvailable = suggestedFormats.isNotEmpty()
 
     var isSuggestedFormatSelected by remember(videoInfo) { mutableStateOf(false) }

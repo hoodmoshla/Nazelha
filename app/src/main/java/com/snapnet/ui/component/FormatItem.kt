@@ -64,6 +64,7 @@ import com.snapnet.util.connectWithDelimiter
 import com.snapnet.util.toBitrateText
 import com.snapnet.util.toDurationText
 import com.snapnet.util.toFileSizeText
+import com.snapnet.util.videoQualityLabel
 
 @Composable
 fun FormatVideoPreview(
@@ -213,10 +214,12 @@ fun SuggestedFormatItem(
     val requestedFormats = videoInfo.requestedFormatList()
     val containsVideo = requestedFormats.any { it.containsVideo() }
     val containsAudio = requestedFormats.any { it.containsAudio() }
-    val unknownFormat = stringResource(R.string.unknown)
     val title =
-        requestedFormats.joinToString(separator = " + ") {
-            it.format?.takeIf(String::isNotBlank) ?: it.formatId ?: unknownFormat
+        requestedFormats.firstNotNullOfOrNull { it.videoQualityLabel() }
+            ?: when {
+                containsVideo -> stringResource(R.string.resolution_unavailable)
+                containsAudio -> stringResource(R.string.audio_only_format)
+                else -> stringResource(R.string.unknown)
         }
 
     val sizes = requestedFormats.map { it.fileSize ?: it.fileSizeApprox }
@@ -295,10 +298,13 @@ fun FormatItem(
         FormatItem(
             modifier = modifier,
             title =
-                format?.takeIf(String::isNotBlank)
-                    ?: connectWithDelimiter(formatId, resolution, delimiter = " · ").ifBlank {
-                        stringResource(R.string.unknown)
-                    },
+                when {
+                    formatInfo.containsVideo() ->
+                        formatInfo.videoQualityLabel()
+                            ?: stringResource(R.string.resolution_unavailable)
+                    formatInfo.containsAudio() -> stringResource(R.string.audio_only_format)
+                    else -> stringResource(R.string.unknown)
+                },
             containsAudio = formatInfo.containsAudio(),
             containsVideo = formatInfo.containsVideo(),
             firstLineText = firstLineText,

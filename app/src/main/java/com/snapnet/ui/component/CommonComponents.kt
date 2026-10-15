@@ -13,10 +13,6 @@ import androidx.compose.ui.unit.dp
 fun NavigationBarSpacer(modifier: Modifier = Modifier) {
     Spacer(
         modifier =
-            modifier.height(
-                with(WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()) {
-                    if (this.value > 30f) this else 0f.dp
-                }
-            )
+            modifier.height(WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding())
     )
 }

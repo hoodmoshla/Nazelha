@@ -328,6 +328,7 @@
     <string name="download_type">نوع التحميل</string>
     <string name="learn_more">أقرأ المزيد</string>
     <string name="unknown">غير معروف</string>
+    <string name="resolution_unavailable">الدقة غير متاحة</string>
     <string name="format_preference">تفضيل التنسيقات</string>
     <string name="remove_multiple_templates_msg">هل ترغب في إزالة %1$s من قوالب الأوامر بشكل دائم؟</string>
     <string name="set_directory_desc">اضغط لتحديد مجلد</string>
