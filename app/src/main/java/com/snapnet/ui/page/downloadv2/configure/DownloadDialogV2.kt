@@ -9,18 +9,27 @@ import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.VisibilityThreshold
 import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.foundation.gestures.draggable
+import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -31,9 +40,9 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.ModalBottomSheetValue
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.DownloadDone
@@ -67,6 +76,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -97,7 +107,6 @@ import com.snapnet.ui.component.ButtonChip
 import com.snapnet.ui.component.DrawerSheetSubtitle
 import com.snapnet.ui.component.OutlinedButtonWithIcon
 import com.snapnet.ui.component.SealModalBottomSheet
-import com.snapnet.ui.component.SealModalBottomSheetM2Variant
 import com.snapnet.ui.component.SingleChoiceChip
 import com.snapnet.ui.component.SingleChoiceSegmentedButton
 import com.snapnet.ui.component.VideoFilterChip
@@ -143,6 +152,7 @@ import com.snapnet.util.ToastUtil
 import com.snapnet.util.USE_CUSTOM_AUDIO_PRESET
 import com.snapnet.util.VIDEO_FORMAT
 import com.snapnet.util.VIDEO_QUALITY
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 @Composable
@@ -451,31 +461,121 @@ private fun ErrorPreview() {
     }
 }
 
+private const val FORMAT_SHEET_COLLAPSED_FRACTION = 0.30f
+private const val FORMAT_SHEET_EXPANDED_FRACTION = 0.96f
+
 @Composable
 fun FormatPage(
     modifier: Modifier = Modifier,
     state: SelectionState.FormatSelection,
     onDismissRequest: () -> Unit,
 ) {
-    val sheetState =
-        androidx.compose.material.rememberModalBottomSheetState(
-            initialValue = ModalBottomSheetValue.Hidden,
-            skipHalfExpanded = true,
-        )
-
-    LaunchedEffect(state) { sheetState.show() }
     val scope = rememberCoroutineScope()
-    BackHandler { scope.launch { sheetState.hide() }.invokeOnCompletion { onDismissRequest() } }
-
-    SealModalBottomSheetM2Variant(sheetState = sheetState, sheetGesturesEnabled = false) {
-        FormatPage(
-            modifier = modifier,
-            videoInfo = state.info,
-            showAllFormats = state.isSharedIntent,
-            onNavigateBack = {
-                scope.launch { sheetState.hide() }.invokeOnCompletion { onDismissRequest() }
-            },
+    var sheetHeightFraction by
+        remember(state) { mutableFloatStateOf(FORMAT_SHEET_COLLAPSED_FRACTION) }
+    var isDragging by remember(state) { mutableStateOf(false) }
+    var isDismissing by remember(state) { mutableStateOf(false) }
+    val animatedHeightFraction by
+        animateFloatAsState(
+            targetValue = sheetHeightFraction,
+            animationSpec = if (isDragging) snap() else tween(durationMillis = 220),
+            label = "format-selection-sheet-height",
         )
+
+    val dismissSheet: () -> Unit = {
+        if (!isDismissing) {
+            isDismissing = true
+            scope.launch {
+                isDragging = false
+                sheetHeightFraction = 0f
+                delay(220)
+                onDismissRequest()
+            }
+        }
+    }
+
+    BackHandler {
+        if (sheetHeightFraction > FORMAT_SHEET_COLLAPSED_FRACTION + 0.04f) {
+            isDragging = false
+            sheetHeightFraction = FORMAT_SHEET_COLLAPSED_FRACTION
+        } else {
+            dismissSheet()
+        }
+    }
+
+    BoxWithConstraints(modifier = modifier.fillMaxSize()) {
+        val sheetHeightPx = with(LocalDensity.current) { maxHeight.toPx() }
+        val flingThresholdPx = with(LocalDensity.current) { 700.dp.toPx() }
+        val dragState = rememberDraggableState { dragAmount ->
+            if (sheetHeightPx > 0f) {
+                sheetHeightFraction =
+                    (sheetHeightFraction - dragAmount / sheetHeightPx).coerceIn(
+                        FORMAT_SHEET_COLLAPSED_FRACTION,
+                        FORMAT_SHEET_EXPANDED_FRACTION,
+                    )
+            }
+        }
+
+        Box(
+            modifier =
+                Modifier.fillMaxSize()
+                    .background(MaterialTheme.colorScheme.scrim.copy(alpha = 0.32f))
+                    .clickable(onClick = dismissSheet)
+        )
+
+        Surface(
+            modifier =
+                Modifier.align(Alignment.BottomCenter)
+                    .fillMaxWidth()
+                    .height(maxHeight * animatedHeightFraction),
+            shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
+            color = MaterialTheme.colorScheme.surfaceContainer,
+            tonalElevation = 6.dp,
+        ) {
+            Column(modifier = Modifier.fillMaxSize()) {
+                Box(
+                    modifier =
+                        Modifier.fillMaxWidth()
+                            .height(24.dp)
+                            .draggable(
+                                state = dragState,
+                                orientation = Orientation.Vertical,
+                                onDragStarted = { isDragging = true },
+                                onDragStopped = { velocity ->
+                                    val midpoint =
+                                        (FORMAT_SHEET_COLLAPSED_FRACTION +
+                                            FORMAT_SHEET_EXPANDED_FRACTION) / 2f
+                                    val shouldExpand =
+                                        when {
+                                            velocity < -flingThresholdPx -> true
+                                            velocity > flingThresholdPx -> false
+                                            else -> sheetHeightFraction >= midpoint
+                                        }
+                                    sheetHeightFraction =
+                                        if (shouldExpand) {
+                                            FORMAT_SHEET_EXPANDED_FRACTION
+                                        } else {
+                                            FORMAT_SHEET_COLLAPSED_FRACTION
+                                        }
+                                    isDragging = false
+                                },
+                            ),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Surface(
+                        modifier = Modifier.size(width = 36.dp, height = 4.dp),
+                        shape = CircleShape,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
+                    ) {}
+                }
+                FormatPage(
+                    modifier = Modifier.weight(1f),
+                    videoInfo = state.info,
+                    showAllFormats = state.isSharedIntent,
+                    onNavigateBack = dismissSheet,
+                )
+            }
+        }
     }
 }
 
