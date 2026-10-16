@@ -8,6 +8,86 @@ import org.junit.Test
 
 class FormatPickerOptionsTest {
     @Test
+    fun labelsPortraitVideoByItsShorterDimensionWithoutChangingReportedDimensions() {
+        val portrait =
+            Format(
+                formatId = "portrait-720",
+                acodec = "aac",
+                vcodec = "avc1",
+                width = 720.0,
+                height = 1280.0,
+            )
+
+        assertEquals(1280, portrait.videoQualityHeight())
+        assertEquals(720, portrait.videoQualityLevel())
+        assertEquals("720×1280 (720p)", portrait.videoQualityLabel())
+    }
+
+    @Test
+    fun keepsAudioAlternativesAndShowsOnlyOneAudioAndCommonVideoTiersInitially() {
+        val audioLow = Format(formatId = "audio-low", acodec = "aac", vcodec = "none", abr = 96.0)
+        val audioHigh = Format(formatId = "audio-high", acodec = "aac", vcodec = "none", abr = 192.0)
+        val video1080 =
+            Format(
+                formatId = "video-1080",
+                acodec = "aac",
+                vcodec = "avc1",
+                width = 1920.0,
+                height = 1080.0,
+                tbr = 1800.0,
+            )
+        val portrait720 =
+            Format(
+                formatId = "portrait-720",
+                acodec = "none",
+                vcodec = "avc1",
+                width = 720.0,
+                height = 1280.0,
+                vbr = 900.0,
+            )
+        val alternate720 =
+            Format(
+                formatId = "alternate-720",
+                acodec = "aac",
+                vcodec = "avc1",
+                width = 1280.0,
+                height = 720.0,
+                tbr = 800.0,
+            )
+        val video480 =
+            Format(
+                formatId = "video-480",
+                acodec = "aac",
+                vcodec = "avc1",
+                width = 854.0,
+                height = 480.0,
+                tbr = 500.0,
+            )
+        val video360 =
+            Format(
+                formatId = "video-360",
+                acodec = "aac",
+                vcodec = "avc1",
+                width = 640.0,
+                height = 360.0,
+                tbr = 300.0,
+            )
+
+        val options =
+            formatPickerOptions(
+                listOf(audioLow, audioHigh, video1080, portrait720, alternate720, video480, video360)
+            )
+        val initialVideo = initialVideoFormatChoices(options.video)
+
+        assertEquals(listOf("audio-high", "audio-low"), options.music.map { it.formatId })
+        assertEquals(listOf("audio-high"), initialAudioFormatChoices(options.music).map { it.formatId })
+        assertEquals(listOf(720, 480, 360), initialVideo.map { it.videoQualityLevel() })
+        assertEquals(listOf("alternate-720", "video-480", "video-360"), initialVideo.map { it.formatId })
+        assertEquals(5, options.video.size)
+        assertTrue(options.video.all { it.containsAudio() && it.containsVideo() })
+    }
+
+    @Test
     fun pairsRealDashStreamsWithContainerCompatibleAudioAndKeepsMuxedFormats() {
         val audioM4a =
             Format(
@@ -91,7 +171,7 @@ class FormatPickerOptionsTest {
     }
 
     @Test
-    fun showsOnlyTheHighestQualityStandaloneAudioChoice() {
+    fun keepsAudioAlternativesAndChoosesTheHighestQualityForTheInitialView() {
         val low = Format(formatId = "audio-low", acodec = "opus", vcodec = "none", abr = 96.0)
         val high = Format(formatId = "audio-high", acodec = "opus", vcodec = "none", abr = 256.0)
         val video =
@@ -104,7 +184,8 @@ class FormatPickerOptionsTest {
 
         val options = formatPickerOptions(listOf(low, video, high))
 
-        assertEquals(listOf("audio-high"), options.music.map { it.formatId })
+        assertEquals(listOf("audio-high", "audio-low"), options.music.map { it.formatId })
+        assertEquals(listOf("audio-high"), initialAudioFormatChoices(options.music).map { it.formatId })
         assertEquals(listOf("video-720+audio-high"), options.video.map { it.formatId })
     }
 

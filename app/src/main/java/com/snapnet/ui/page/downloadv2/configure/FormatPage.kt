@@ -7,6 +7,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -18,6 +19,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -35,8 +37,11 @@ import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.FileDownload
 import androidx.compose.material.icons.outlined.Subtitles
+import androidx.compose.material.icons.rounded.Audiotrack
+import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -44,6 +49,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RangeSliderState
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -62,6 +68,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
@@ -102,8 +109,11 @@ import com.snapnet.util.VIDEO_CLIP
 import com.snapnet.util.VideoClip
 import com.snapnet.util.VideoInfo
 import com.snapnet.util.formatPickerOptions
+import com.snapnet.util.initialAudioFormatChoices
+import com.snapnet.util.initialVideoFormatChoices
 import com.snapnet.util.toHttpsUrl
-import kotlin.math.min
+import com.snapnet.util.toFileSizeText
+import com.snapnet.util.videoQualityLevel
 import kotlin.math.roundToInt
 import kotlinx.coroutines.delay
 import org.koin.compose.koinInject
@@ -119,13 +129,12 @@ private data class FormatConfig(
     val selectedAutoCaptions: List<String>,
 )
 
-@Suppress("UNUSED_PARAMETER")
 @Composable
 fun FormatPage(
     modifier: Modifier = Modifier,
     videoInfo: VideoInfo,
     downloader: DownloaderV2 = koinInject(),
-    showAllFormats: Boolean = false,
+    isSharedIntent: Boolean = false,
     onNavigateBack: () -> Unit = {},
 ) {
     if (videoInfo.formats.isNullOrEmpty()) return
@@ -147,6 +156,7 @@ fun FormatPage(
     FormatPageImpl(
         modifier = modifier,
         videoInfo = videoInfo,
+        isSharedIntent = isSharedIntent,
         onNavigateBack = onNavigateBack,
         selectedSubtitleCodes = initialSelectedSubtitles,
         isClippingAvailable = VIDEO_CLIP.getBoolean() && (videoInfo.duration ?: .0) >= 0,
@@ -278,6 +288,7 @@ fun FormatPagePreview() {
 private fun FormatPageImpl(
     modifier: Modifier = Modifier,
     videoInfo: VideoInfo = VideoInfo(),
+    isSharedIntent: Boolean = false,
     isClippingAvailable: Boolean = false,
     selectedSubtitleCodes: Set<String>,
     onNavigateBack: () -> Unit = {},
@@ -297,8 +308,18 @@ private fun FormatPageImpl(
     val audioOnlyFormats = pickerOptions.music
     val videoAudioFormats = pickerOptions.video
 
-    var audioOnlyItemLimit by remember { mutableIntStateOf(6) }
-    var videoAudioItemLimit by remember { mutableIntStateOf(6) }
+    val initialAudioOnlyFormats = remember(audioOnlyFormats) { initialAudioFormatChoices(audioOnlyFormats) }
+    val initialVideoAudioFormats =
+        remember(videoAudioFormats, isSharedIntent) {
+            if (isSharedIntent) initialVideoFormatChoices(videoAudioFormats)
+            else videoAudioFormats.take(6)
+        }
+    var showAllAudioOnlyFormats by remember(videoInfo) { mutableStateOf(false) }
+    var showAllVideoAudioFormats by remember(videoInfo) { mutableStateOf(false) }
+    val visibleAudioOnlyFormats =
+        if (showAllAudioOnlyFormats) audioOnlyFormats else initialAudioOnlyFormats
+    val visibleVideoAudioFormats =
+        if (showAllVideoAudioFormats) videoAudioFormats else initialVideoAudioFormats
 
     var selectedVideoAudioFormat by remember(videoInfo) { mutableIntStateOf(NOT_SELECTED) }
     var selectedAudioOnlyFormat by remember(videoInfo) { mutableIntStateOf(NOT_SELECTED) }
@@ -367,26 +388,41 @@ private fun FormatPageImpl(
 
     Scaffold(
         modifier = modifier.fillMaxSize().nestedScroll(scrollBehavior.nestedScrollConnection),
+        containerColor =
+            if (isSharedIntent) Color(0xFF151515) else MaterialTheme.colorScheme.background,
         topBar = {
             TopAppBar(
                 title = {
                     Text(
-                        text = stringResource(R.string.format_selection),
+                        text =
+                            stringResource(
+                                if (isSharedIntent) R.string.download else R.string.format_selection
+                            ),
                         style = MaterialTheme.typography.titleMedium.copy(fontSize = 18.sp),
                     )
                 },
                 scrollBehavior = scrollBehavior,
                 navigationIcon = {
-                    IconButton(onClick = { onNavigateBack() }) {
-                        Icon(Icons.Outlined.Close, stringResource(R.string.close))
+                    if (!isSharedIntent) {
+                        IconButton(onClick = { onNavigateBack() }) {
+                            Icon(Icons.Outlined.Close, stringResource(R.string.close))
+                        }
                     }
                 },
+                colors =
+                    TopAppBarDefaults.topAppBarColors(
+                        containerColor =
+                            if (isSharedIntent) Color(0xFF151515)
+                            else MaterialTheme.colorScheme.surface
+                    ),
             )
         },
         bottomBar = {
             Surface(
                 modifier = Modifier.navigationBarsPadding(),
-                color = MaterialTheme.colorScheme.surface,
+                color =
+                    if (isSharedIntent) Color(0xFF151515)
+                    else MaterialTheme.colorScheme.surface,
                 tonalElevation = 3.dp,
             ) {
                 Button(
@@ -406,13 +442,25 @@ private fun FormatPageImpl(
                     },
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
                     enabled = isFormatSelected,
+                    shape = if (isSharedIntent) CircleShape else MaterialTheme.shapes.medium,
+                    colors =
+                        if (isSharedIntent) {
+                            ButtonDefaults.buttonColors(
+                                containerColor = Color(0xFF303030),
+                                disabledContainerColor = Color(0xFF242424),
+                                contentColor = Color.White,
+                                disabledContentColor = Color(0xFF777777),
+                            )
+                        } else ButtonDefaults.buttonColors(),
                 ) {
-                    Icon(
-                        imageVector = Icons.Outlined.FileDownload,
-                        contentDescription = null,
-                        modifier = Modifier.size(20.dp),
-                    )
-                    Spacer(modifier = Modifier.size(8.dp))
+                    if (!isSharedIntent) {
+                        Icon(
+                            imageVector = Icons.Outlined.FileDownload,
+                            contentDescription = null,
+                            modifier = Modifier.size(20.dp),
+                        )
+                        Spacer(modifier = Modifier.size(8.dp))
+                    }
                     Text(stringResource(R.string.start_download))
                 }
             }
@@ -425,27 +473,29 @@ private fun FormatPageImpl(
             columns = GridCells.Fixed(1),
             contentPadding = PaddingValues(start = 8.dp, top = 8.dp, end = 8.dp, bottom = 16.dp),
         ) {
-            videoInfo.run {
-                item(span = { GridItemSpan(maxLineSpan) }) {
-                    FormatVideoPreview(
-                        modifier = Modifier.padding(horizontal = 8.dp),
-                        title = videoTitle.ifEmpty { title },
-                        author =
-                            uploader?.takeIf { it.isNotBlank() }
-                                ?: channel?.takeIf { it.isNotBlank() }
-                                ?: uploaderId?.takeIf { it.isNotBlank() }
-                                ?: stringResource(R.string.unknown),
-                        thumbnailUrl = thumbnail.toHttpsUrl(),
-                        duration = previewDuration,
-                        isClippingVideo = isClippingVideo,
-                        isSplittingVideo = isSplittingVideo,
-                        isClippingAvailable = isClippingAvailable,
-                        isSplitByChapterAvailable = isSplitByChapterAvailable,
-                        onClippingToggled = { isClippingVideo = !isClippingVideo },
-                        onSplittingToggled = { isSplittingVideo = !isSplittingVideo },
-                        onRename = { showRenameDialog = true },
-                        onOpenThumbnail = { uriHandler.openUri(thumbnail.toHttpsUrl()) },
-                    )
+            if (!isSharedIntent) {
+                videoInfo.run {
+                    item(span = { GridItemSpan(maxLineSpan) }) {
+                        FormatVideoPreview(
+                            modifier = Modifier.padding(horizontal = 8.dp),
+                            title = videoTitle.ifEmpty { title },
+                            author =
+                                uploader?.takeIf { it.isNotBlank() }
+                                    ?: channel?.takeIf { it.isNotBlank() }
+                                    ?: uploaderId?.takeIf { it.isNotBlank() }
+                                    ?: stringResource(R.string.unknown),
+                            thumbnailUrl = thumbnail.toHttpsUrl(),
+                            duration = previewDuration,
+                            isClippingVideo = isClippingVideo,
+                            isSplittingVideo = isSplittingVideo,
+                            isClippingAvailable = isClippingAvailable,
+                            isSplitByChapterAvailable = isSplitByChapterAvailable,
+                            onClippingToggled = { isClippingVideo = !isClippingVideo },
+                            onSplittingToggled = { isSplittingVideo = !isSplittingVideo },
+                            onRename = { showRenameDialog = true },
+                            onOpenThumbnail = { uriHandler.openUri(thumbnail.toHttpsUrl()) },
+                        )
+                    }
                 }
             }
 
@@ -556,6 +606,56 @@ private fun FormatPageImpl(
                 }
             }
 
+            if (audioOnlyFormats.isNotEmpty()) {
+                item(span = { GridItemSpan(maxLineSpan) }) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.padding(top = 16.dp).padding(horizontal = 12.dp),
+                    ) {
+                        FormatSubtitle(
+                            text = stringResource(R.string.music),
+                            color = MaterialTheme.colorScheme.secondary,
+                            modifier = Modifier.weight(1f).padding(vertical = 4.dp),
+                        )
+                        ClickableTextAction(
+                            visible =
+                                !isSharedIntent &&
+                                    !showAllAudioOnlyFormats &&
+                                    visibleAudioOnlyFormats.size < audioOnlyFormats.size,
+                            text = stringResource(R.string.more_formats),
+                        ) {
+                            hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+                            showAllAudioOnlyFormats = true
+                        }
+                    }
+                }
+                itemsIndexed(visibleAudioOnlyFormats) { _, formatInfo ->
+                    val formatIndex = audioOnlyFormats.indexOf(formatInfo)
+                    val onSelectFormat = {
+                        selectedAudioOnlyFormat = formatIndex
+                        selectedVideoAudioFormat = NOT_SELECTED
+                    }
+                    if (isSharedIntent && !showAllAudioOnlyFormats) {
+                        SharedFormatChoiceRow(
+                            formatInfo = formatInfo,
+                            isVideo = false,
+                            selected = selectedAudioOnlyFormat == formatIndex,
+                            onLongClick = { formatInfo.url.share() },
+                            onClick = onSelectFormat,
+                        )
+                    } else {
+                        FormatItem(
+                            formatInfo = formatInfo,
+                            selected = selectedAudioOnlyFormat == formatIndex,
+                            containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                            outlineColor = MaterialTheme.colorScheme.secondary,
+                            onLongClick = { formatInfo.url.share() },
+                            onClick = onSelectFormat,
+                        )
+                    }
+                }
+            }
+
             if (videoAudioFormats.isNotEmpty()) {
                 item(span = { GridItemSpan(maxLineSpan) }) {
                     Row(
@@ -567,67 +667,70 @@ private fun FormatPageImpl(
                             modifier = Modifier.weight(1f).padding(vertical = 4.dp),
                         )
                         ClickableTextAction(
-                            visible = videoAudioItemLimit < videoAudioFormats.size,
+                            visible =
+                                !isSharedIntent &&
+                                    !showAllVideoAudioFormats &&
+                                    visibleVideoAudioFormats.size < videoAudioFormats.size,
                             text = stringResource(R.string.more_formats),
                         ) {
                             hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
-                            videoAudioItemLimit = Int.MAX_VALUE
+                            showAllVideoAudioFormats = true
                         }
                     }
                 }
-                itemsIndexed(
-                    videoAudioFormats.subList(0, min(videoAudioItemLimit, videoAudioFormats.size))
-                ) { index, formatInfo ->
-                    FormatItem(
-                        formatInfo = formatInfo,
-                        selected = selectedVideoAudioFormat == index,
-                        onLongClick = { formatInfo.url.share() },
-                    ) {
-                        selectedVideoAudioFormat = index
+                itemsIndexed(visibleVideoAudioFormats) { _, formatInfo ->
+                    val formatIndex = videoAudioFormats.indexOf(formatInfo)
+                    val onSelectFormat = {
+                        selectedVideoAudioFormat = formatIndex
                         selectedAudioOnlyFormat = NOT_SELECTED
                     }
+                    if (isSharedIntent && !showAllVideoAudioFormats) {
+                        SharedFormatChoiceRow(
+                            formatInfo = formatInfo,
+                            isVideo = true,
+                            selected = selectedVideoAudioFormat == formatIndex,
+                            onLongClick = { formatInfo.url.share() },
+                            onClick = onSelectFormat,
+                        )
+                    } else {
+                        FormatItem(
+                            formatInfo = formatInfo,
+                            selected = selectedVideoAudioFormat == formatIndex,
+                            onLongClick = { formatInfo.url.share() },
+                            onClick = onSelectFormat,
+                        )
+                    }
                 }
             }
 
-            if (audioOnlyFormats.isNotEmpty())
+            if (isSharedIntent && (!showAllAudioOnlyFormats || !showAllVideoAudioFormats)) {
                 item(span = { GridItemSpan(maxLineSpan) }) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.padding(top = 16.dp).padding(horizontal = 12.dp),
-                    ) {
-                        FormatSubtitle(
-                            text = stringResource(R.string.music),
-                            color = MaterialTheme.colorScheme.secondary,
-                            modifier = Modifier.weight(1f).padding(vertical = 4.dp),
-                        )
-
-                        ClickableTextAction(
-                            visible = audioOnlyItemLimit < audioOnlyFormats.size,
-                            text = stringResource(R.string.more_formats),
+                    Column {
+                        androidx.compose.material3.HorizontalDivider()
+                        Row(
+                            modifier =
+                                Modifier.fillMaxWidth()
+                                    .clickable {
+                                        showAllAudioOnlyFormats = true
+                                        showAllVideoAudioFormats = true
+                                    }
+                                    .padding(horizontal = 24.dp, vertical = 18.dp),
+                            verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
-                            audioOnlyItemLimit = Int.MAX_VALUE
+                            Text(
+                                text = stringResource(R.string.more_formats),
+                                modifier = Modifier.weight(1f),
+                                style = MaterialTheme.typography.titleMedium,
+                            )
+                            Text(
+                                text = stringResource(R.string.all),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
                         }
                     }
                 }
-
-            itemsIndexed(
-                audioOnlyFormats.subList(
-                    fromIndex = 0,
-                    toIndex = min(audioOnlyItemLimit, audioOnlyFormats.size),
-                )
-            ) { index, formatInfo ->
-                FormatItem(
-                    formatInfo = formatInfo,
-                    selected = selectedAudioOnlyFormat == index,
-                    containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                    outlineColor = MaterialTheme.colorScheme.secondary,
-                    onLongClick = { formatInfo.url.share() },
-                ) {
-                    selectedAudioOnlyFormat = index
-                    selectedVideoAudioFormat = NOT_SELECTED
-                }
             }
+
             item { Spacer(modifier = Modifier.height(16.dp)) }
         }
     }
@@ -657,10 +760,68 @@ private fun FormatPageImpl(
                     clear()
                     addAll(subs)
                 }
-
                 showSubtitleSelectionDialog = false
             },
         )
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun SharedFormatChoiceRow(
+    formatInfo: Format,
+    isVideo: Boolean,
+    selected: Boolean,
+    onLongClick: () -> Unit,
+    onClick: () -> Unit,
+) {
+    val size = formatInfo.fileSize ?: formatInfo.fileSizeApprox
+    val sizeLabel =
+        size?.toFileSizeText()?.let { if (formatInfo.fileSize == null) "≈ $it" else it }
+    val label =
+        if (isVideo) {
+            formatInfo.videoQualityLevel()?.let { "${it}p" }
+                ?: stringResource(R.string.resolution_unavailable)
+        } else {
+            stringResource(R.string.audio_only_format)
+        }
+
+    Row(
+        modifier =
+            Modifier.fillMaxWidth()
+                .heightIn(min = 64.dp)
+                .combinedClickable(
+                    onClick = onClick,
+                    onLongClick = onLongClick,
+                    onLongClickLabel = stringResource(R.string.copy_link),
+                )
+                .padding(horizontal = 20.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Icon(
+            imageVector = if (isVideo) Icons.Rounded.PlayArrow else Icons.Rounded.Audiotrack,
+            contentDescription = stringResource(if (isVideo) R.string.video else R.string.music),
+            modifier = Modifier.size(24.dp),
+            tint = MaterialTheme.colorScheme.onSurface,
+        )
+        Text(
+            text = label,
+            modifier = Modifier,
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onSurface,
+            maxLines = 1,
+        )
+        Spacer(modifier = Modifier.weight(1f))
+        sizeLabel?.let { sizeText ->
+            Text(
+                text = sizeText,
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+            )
+        }
+        RadioButton(selected = selected, onClick = onClick)
+    }
 }
 
 @Composable

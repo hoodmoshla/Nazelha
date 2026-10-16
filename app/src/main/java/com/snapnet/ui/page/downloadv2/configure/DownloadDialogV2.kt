@@ -86,6 +86,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalDensity
@@ -462,6 +463,7 @@ private fun ErrorPreview() {
 }
 
 private const val FORMAT_SHEET_COLLAPSED_FRACTION = 0.30f
+private const val FORMAT_SHEET_SHARED_INITIAL_FRACTION = 0.72f
 private const val FORMAT_SHEET_EXPANDED_FRACTION = 0.96f
 
 @Composable
@@ -472,7 +474,12 @@ fun FormatPage(
 ) {
     val scope = rememberCoroutineScope()
     var sheetHeightFraction by
-        remember(state) { mutableFloatStateOf(FORMAT_SHEET_COLLAPSED_FRACTION) }
+        remember(state) {
+            mutableFloatStateOf(
+                if (state.isSharedIntent) FORMAT_SHEET_SHARED_INITIAL_FRACTION
+                else FORMAT_SHEET_COLLAPSED_FRACTION
+            )
+        }
     var isDragging by remember(state) { mutableStateOf(false) }
     var isDismissing by remember(state) { mutableStateOf(false) }
     val animatedHeightFraction by
@@ -519,7 +526,11 @@ fun FormatPage(
         Box(
             modifier =
                 Modifier.fillMaxSize()
-                    .background(MaterialTheme.colorScheme.scrim.copy(alpha = 0.32f))
+                    .background(
+                        MaterialTheme.colorScheme.scrim.copy(
+                            alpha = if (state.isSharedIntent) 0.48f else 0.32f
+                        )
+                    )
                     .clickable(onClick = dismissSheet)
         )
 
@@ -529,7 +540,9 @@ fun FormatPage(
                     .fillMaxWidth()
                     .height(maxHeight * animatedHeightFraction),
             shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
-            color = MaterialTheme.colorScheme.surfaceContainer,
+            color =
+                if (state.isSharedIntent) Color(0xFF151515)
+                else MaterialTheme.colorScheme.surfaceContainer,
             tonalElevation = 6.dp,
         ) {
             Column(modifier = Modifier.fillMaxSize()) {
@@ -571,7 +584,7 @@ fun FormatPage(
                 FormatPage(
                     modifier = Modifier.weight(1f),
                     videoInfo = state.info,
-                    showAllFormats = state.isSharedIntent,
+                    isSharedIntent = state.isSharedIntent,
                     onNavigateBack = dismissSheet,
                 )
             }

@@ -26,8 +26,8 @@ fun formatPickerOptions(
             .sortedWith(audioQualityComparator)
             .toList()
 
-    // A single best standalone audio choice keeps the picker compact and easy to scan.
-    val music = audioFormats.take(1)
+    // Keep the real audio choices; the UI shows the best one first and reveals the rest on demand.
+    val music = audioFormats
     val videoChoices =
         formats.mapNotNull { format ->
             when {
@@ -57,11 +57,29 @@ fun formatPickerOptions(
     return FormatPickerOptions(music = music, video = video)
 }
 
+/** One best real audio format for the compact initial view. */
+fun initialAudioFormatChoices(formats: List<Format>): List<Format> = formats.take(1)
+
+/** One best real video-with-audio format for each common quality in the compact initial view. */
+fun initialVideoFormatChoices(formats: List<Format>): List<Format> =
+    DEFAULT_VIDEO_QUALITY_LEVELS.mapNotNull { quality ->
+        formats.firstOrNull { it.videoQualityLevel() == quality }
+    }
+
 /** A title based only on resolution reported by yt-dlp; returns null rather than inventing one. */
 fun Format.videoQualityLabel(): String? {
-    val height = videoQualityHeight() ?: return null
     val width = videoQualityWidth()
-    return if (width != null) "$width×$height (${height}p)" else "${height}p"
+    val height = videoQualityHeight()
+    val quality = videoQualityLevel() ?: return null
+    return if (width != null && height != null) "$width×$height (${quality}p)" else "${quality}p"
+}
+
+/** Resolution tier uses the shorter reported side so portrait video is labeled as expected. */
+fun Format.videoQualityLevel(): Int? {
+    if (!containsVideo()) return null
+    val width = videoQualityWidth()
+    val height = videoQualityHeight()
+    return if (width != null && height != null) minOf(width, height) else width ?: height
 }
 
 /** Resolve height from structured fields or explicit dimensions/`720p` text in yt-dlp output. */
@@ -177,10 +195,11 @@ private val audioQualityComparator =
         .thenByDescending { it.fileSize ?: it.fileSizeApprox ?: 0.0 }
 
 private val videoQualityComparator =
-    compareByDescending<Format> { it.videoQualityHeight() ?: 0 }
+    compareByDescending<Format> { it.videoQualityLevel() ?: 0 }
         .thenByDescending { it.videoQualityWidth() ?: 0 }
         .thenByDescending { it.fps ?: 0.0 }
         .thenByDescending { it.tbr ?: it.vbr ?: 0.0 }
 
+private val DEFAULT_VIDEO_QUALITY_LEVELS = listOf(720, 480, 360)
 private val DIMENSIONS = Regex("(?<!\\d)(\\d{2,5})\\s*[x×]\\s*(\\d{2,5})(?!\\d)")
 private val PIXEL_HEIGHT = Regex("(?<!\\d)(\\d{3,4})\\s*p\\b", RegexOption.IGNORE_CASE)
