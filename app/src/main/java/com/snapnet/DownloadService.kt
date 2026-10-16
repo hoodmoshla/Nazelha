@@ -35,6 +35,7 @@ class DownloadService : Service() {
 
     /** Guards against calling `startForeground` twice, which is a no-op but noisy in logs. */
     private var isForeground = false
+    private var foregroundNotificationId = SERVICE_NOTIFICATION_ID
 
     override fun onBind(intent: Intent): IBinder {
         promoteToForeground()
@@ -57,16 +58,10 @@ class DownloadService : Service() {
                     Intent(this, MainActivity::class.java).let {
                         PendingIntent.getActivity(this, 0, it, PendingIntent.FLAG_IMMUTABLE)
                     }
-                val notification = NotificationUtil.makeServiceNotification(pendingIntent)
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-                    startForeground(
-                        SERVICE_NOTIFICATION_ID,
-                        notification,
-                        ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE,
-                    )
-                } else {
-                    startForeground(SERVICE_NOTIFICATION_ID, notification)
-                }
+                val (notificationId, notification) =
+                    NotificationUtil.makeServiceNotification(pendingIntent)
+                startForegroundCompat(notificationId, notification)
+                foregroundNotificationId = notificationId
                 isForeground = true
                 Log.d(TAG, "promoted to foreground")
             }
@@ -78,6 +73,48 @@ class DownloadService : Service() {
     }
 
     fun isForegroundReady(): Boolean = isForeground
+
+    fun isForegroundNotification(notificationId: Int): Boolean =
+        isForeground && foregroundNotificationId == notificationId
+
+    /** Replace the startup placeholder with a real progress notice, keeping just one notification. */
+    fun replacePlaceholderWithProgress(
+        notificationId: Int,
+        notification: android.app.Notification,
+    ): Boolean {
+        if (!isForeground || foregroundNotificationId != SERVICE_NOTIFICATION_ID) return false
+        return replaceForegroundNotification(notificationId, notification)
+    }
+
+    /** Move foreground ownership to another active task's progress notification. */
+    fun replaceForegroundNotification(
+        notificationId: Int,
+        notification: android.app.Notification,
+    ): Boolean {
+        if (!isForeground) return false
+        val previousNotificationId = foregroundNotificationId
+        if (previousNotificationId == notificationId) return true
+        return runCatching {
+                startForegroundCompat(notificationId, notification)
+                foregroundNotificationId = notificationId
+                NotificationUtil.cancelNotification(previousNotificationId)
+                true
+            }
+            .onFailure { Log.w(TAG, "could not replace the foreground progress notification", it) }
+            .getOrDefault(false)
+    }
+
+    private fun startForegroundCompat(notificationId: Int, notification: android.app.Notification) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            startForeground(
+                notificationId,
+                notification,
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE,
+            )
+        } else {
+            startForeground(notificationId, notification)
+        }
+    }
 
     override fun onUnbind(intent: Intent?): Boolean {
         // Deliberately do *not* stop here: the caller (App.stopService) stops the service once the
@@ -91,11 +128,18 @@ class DownloadService : Service() {
         runCatching {
                 if (isForeground) {
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-                        stopForeground(STOP_FOREGROUND_REMOVE)
+                        stopForeground(
+                            if (foregroundNotificationId == SERVICE_NOTIFICATION_ID) {
+                                STOP_FOREGROUND_REMOVE
+                            } else {
+                                STOP_FOREGROUND_DETACH
+                            }
+                        )
                     } else {
                         @Suppress("DEPRECATION") stopForeground(true)
                     }
                     isForeground = false
+                    foregroundNotificationId = SERVICE_NOTIFICATION_ID
                 }
                 stopSelf()
             }
@@ -104,6 +148,7 @@ class DownloadService : Service() {
 
     override fun onDestroy() {
         isForeground = false
+        foregroundNotificationId = SERVICE_NOTIFICATION_ID
         super.onDestroy()
     }
 

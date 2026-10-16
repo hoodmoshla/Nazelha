@@ -13,6 +13,7 @@ import android.util.Log
 import androidx.annotation.RequiresApi
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE
+import com.snapnet.App
 import com.snapnet.App.Companion.context
 import com.snapnet.NotificationActionReceiver
 import com.snapnet.NotificationActionReceiver.Companion.ACTION_CANCEL_TASK
@@ -40,6 +41,9 @@ object NotificationUtil {
     private const val DEFAULT_NOTIFICATION_ID = 100
     const val SERVICE_NOTIFICATION_ID = 123
     private lateinit var serviceNotification: Notification
+    private var serviceNotificationId = SERVICE_NOTIFICATION_ID
+    private val activeProgressNotifications = linkedMapOf<Int, Notification>()
+    private val progressNotificationsLock = Any()
 
     //    private var builder =
     //        NotificationCompat.Builder(context, CHANNEL_ID).setSmallIcon(R.drawable.ic_stat_seal)
@@ -111,7 +115,8 @@ object NotificationUtil {
                     }
             }
 
-        NotificationCompat.Builder(context, CHANNEL_ID)
+        val notification =
+            NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_stat_seal)
             .setContentTitle(title)
             .setContentText(text)
@@ -126,8 +131,11 @@ object NotificationUtil {
                 pendingIntent?.let {
                     addAction(R.drawable.outline_cancel_24, context.getString(R.string.cancel), it)
                 }
-                notificationManager.notify(notificationId, build())
+                build()
             }
+        rememberActiveProgress(notificationId, notification)
+        notificationManager.notify(notificationId, notification)
+        App.replacePlaceholderForegroundNotification(notificationId, notification)
     }
 
     /**
@@ -143,6 +151,7 @@ object NotificationUtil {
         progress: Int = PROGRESS_INITIAL,
         text: String? = null,
     ) {
+        forgetProgressAndHandoff(notificationId)
         if (!NOTIFICATION.getBoolean()) return
         val notificationState = DownloadNotificationPolicy.paused()
         val resumePendingIntent =
@@ -180,6 +189,7 @@ object NotificationUtil {
         intent: PendingIntent? = null,
     ) {
         Log.d(TAG, "finishNotification: ")
+        forgetProgressAndHandoff(notificationId)
         notificationManager.cancel(notificationId)
         if (!NOTIFICATION.getBoolean()) return
         val notificationState = DownloadNotificationPolicy.completed()
@@ -200,6 +210,7 @@ object NotificationUtil {
         title: String? = null,
         text: String? = null,
     ) {
+        forgetProgressAndHandoff(notificationId)
         //        notificationManager.cancel(notificationId)
         val builder =
             NotificationCompat.Builder(context, CHANNEL_ID)
@@ -214,29 +225,49 @@ object NotificationUtil {
         notificationManager.notify(notificationId, builder.build())
     }
 
-    fun makeServiceNotification(intent: PendingIntent, text: String? = null): Notification {
+    fun makeServiceNotification(intent: PendingIntent): Pair<Int, Notification> {
+        val activeProgress = latestActiveProgressNotification()
+        if (activeProgress != null) {
+            serviceNotificationId = activeProgress.first
+            serviceNotification =
+                NotificationCompat.Builder(context, activeProgress.second)
+                    .setContentIntent(intent)
+                    .setCategory(NotificationCompat.CATEGORY_SERVICE)
+                    .setOngoing(true)
+                    .setForegroundServiceBehavior(FOREGROUND_SERVICE_IMMEDIATE)
+                    .build()
+            rememberActiveProgress(serviceNotificationId, serviceNotification)
+            return serviceNotificationId to serviceNotification
+        }
+
+        serviceNotificationId = SERVICE_NOTIFICATION_ID
         serviceNotification =
-            NotificationCompat.Builder(context, SERVICE_CHANNEL_ID)
+            NotificationCompat.Builder(context, CHANNEL_ID)
                 .setSmallIcon(R.drawable.ic_stat_seal)
-                .setContentTitle(context.getString(R.string.service_title))
-                .setContentText(text)
+                .setContentTitle(context.getString(R.string.downloading_indicator_text))
+                .setProgress(PROGRESS_MAX, PROGRESS_INITIAL, true)
                 .setOngoing(true)
+                .setOnlyAlertOnce(true)
+                .setCategory(NotificationCompat.CATEGORY_SERVICE)
                 .setContentIntent(intent)
                 .setForegroundServiceBehavior(FOREGROUND_SERVICE_IMMEDIATE)
                 .build()
-        return serviceNotification
+        return serviceNotificationId to serviceNotification
     }
 
     fun updateServiceNotificationForPlaylist(index: Int, itemCount: Int) {
         serviceNotification =
             NotificationCompat.Builder(context, serviceNotification)
-                .setContentTitle(context.getString(R.string.service_title) + " ($index/$itemCount)")
+                .setContentTitle(
+                    context.getString(R.string.downloading_indicator_text) + " ($index/$itemCount)"
+                )
                 .build()
-        notificationManager.notify(SERVICE_NOTIFICATION_ID, serviceNotification)
+        notificationManager.notify(serviceNotificationId, serviceNotification)
     }
 
     fun cancelNotification(notificationId: Int) {
         notificationManager.cancel(notificationId)
+        forgetProgressAndHandoff(notificationId)
     }
 
     fun notifyError(
@@ -245,6 +276,7 @@ object NotificationUtil {
         notificationId: Int,
         report: String,
     ) {
+        forgetProgressAndHandoff(notificationId)
         if (!NOTIFICATION.getBoolean()) return
 
         val intent =
@@ -320,7 +352,8 @@ object NotificationUtil {
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
             )
 
-        NotificationCompat.Builder(context, CHANNEL_ID)
+        val notification =
+            NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_stat_seal)
             .setContentTitle(
                 "[${templateName}_${taskUrl}] " +
@@ -338,12 +371,16 @@ object NotificationUtil {
                     context.getString(R.string.cancel),
                     pendingIntent,
                 )
-                notificationManager.notify(notificationId, build())
+                build()
             }
+        rememberActiveProgress(notificationId, notification)
+        notificationManager.notify(notificationId, notification)
+        App.replacePlaceholderForegroundNotification(notificationId, notification)
     }
 
     fun cancelAllNotifications() {
         notificationManager.cancelAll()
+        synchronized(progressNotificationsLock) { activeProgressNotifications.clear() }
     }
 
     fun areNotificationsEnabled(): Boolean {
@@ -355,5 +392,25 @@ object NotificationUtil {
                 ?.importance != NotificationManager.IMPORTANCE_NONE
         }
         return true
+    }
+
+    private fun rememberActiveProgress(notificationId: Int, notification: Notification) {
+        synchronized(progressNotificationsLock) {
+            activeProgressNotifications.remove(notificationId)
+            activeProgressNotifications[notificationId] = notification
+        }
+    }
+
+    private fun latestActiveProgressNotification(): Pair<Int, Notification>? =
+        synchronized(progressNotificationsLock) {
+            activeProgressNotifications.entries.lastOrNull()?.let { it.key to it.value }
+        }
+
+    private fun forgetProgressAndHandoff(notificationId: Int) {
+        synchronized(progressNotificationsLock) { activeProgressNotifications.remove(notificationId) }
+        if (!App.isForegroundNotification(notificationId)) return
+        latestActiveProgressNotification()?.let { (nextId, nextNotification) ->
+            App.replaceForegroundNotification(nextId, nextNotification)
+        }
     }
 }

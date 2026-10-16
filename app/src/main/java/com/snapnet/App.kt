@@ -5,6 +5,7 @@ import android.app.Application
 import android.app.Application.ActivityLifecycleCallbacks
 import android.os.Bundle
 import android.app.Activity
+import android.app.Notification
 import android.content.ClipboardManager
 import android.content.ComponentName
 import android.content.Context
@@ -254,6 +255,21 @@ class App : Application() {
                 )
             }
         }
+
+        internal fun replacePlaceholderForegroundNotification(
+            notificationId: Int,
+            notification: Notification,
+        ): Boolean =
+            boundService?.replacePlaceholderWithProgress(notificationId, notification) ?: false
+
+        internal fun replaceForegroundNotification(
+            notificationId: Int,
+            notification: Notification,
+        ): Boolean =
+            boundService?.replaceForegroundNotification(notificationId, notification) ?: false
+
+        internal fun isForegroundNotification(notificationId: Int): Boolean =
+            boundService?.isForegroundNotification(notificationId) == true
 
         /** Updates one independent producer of work that needs the foreground service. */
         internal fun setServiceWorkActive(source: DownloadWorkSource, active: Boolean) {

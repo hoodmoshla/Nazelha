@@ -16,7 +16,6 @@ data class FormatPickerOptions(
  */
 fun formatPickerOptions(
     formats: List<Format>,
-    recommendedFormats: List<Format> = emptyList(),
     durationSeconds: Double? = null,
 ): FormatPickerOptions {
     val audioFormats =
@@ -29,18 +28,10 @@ fun formatPickerOptions(
 
     // A single best standalone audio choice keeps the picker compact and easy to scan.
     val music = audioFormats.take(1)
-    val recommendedVideoQualities =
-        recommendedFormats
-            .asSequence()
-            .filter { it.containsVideo() }
-            .mapNotNull { it.videoQualityKey() }
-            .toSet()
-
     val videoChoices =
         formats.mapNotNull { format ->
             when {
                 !format.containsVideo() || !format.formatId.isUsableFormatId() -> null
-                format.videoQualityHeight() == null -> null
                 format.containsAudio() -> format
                 else -> {
                     val audio =
@@ -57,9 +48,8 @@ fun formatPickerOptions(
     val video =
         videoChoices
             .asSequence()
-            .filter { it.videoQualityHeight() != null }
-            // The suggested card already represents this quality; do not repeat it below.
-            .filter { it.videoQualityKey() !in recommendedVideoQualities }
+            // Preserve distinct streams at a shared resolution; their codecs, containers, bitrate,
+            // format IDs, and sizes can differ materially.
             .distinctBy { it.selectionIdKey() }
             .sortedWith(videoQualityComparator)
             .toList()
@@ -84,11 +74,6 @@ fun Format.videoQualityHeight(): Int? {
 
 private fun Format.videoQualityWidth(): Int? =
     width.toPositiveInt() ?: reportedDimensions()?.first
-
-private fun Format.videoQualityKey(): String? {
-    val height = videoQualityHeight() ?: return null
-    return videoQualityWidth()?.let { "${it}x$height" } ?: height.toString()
-}
 
 private fun Format.reportedDimensions(): Pair<Int, Int>? {
     val match =

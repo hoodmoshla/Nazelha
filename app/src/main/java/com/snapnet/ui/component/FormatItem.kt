@@ -293,7 +293,24 @@ fun FormatItem(
             }
         val firstLineText = listOfNotNull(fileSizeText, bitrateText).joinToString(" · ")
 
-        val secondLineText = connectWithDelimiter(ext?.uppercase(), codec, delimiter = " · ")
+        val videoContainer = (videoExt ?: ext.takeIf { containsVideo() })?.uppercase()
+        val audioContainer = (audioExt ?: ext.takeIf { containsAudio() })?.uppercase()
+        val containerText = listOfNotNull(videoContainer, audioContainer).distinct().joinToString("+")
+        val frameRateText =
+            fps?.takeIf { it.isFinite() && it > 0.0 }?.let { frameRate ->
+                stringResource(R.string.format_fps_value, frameRate.toString().removeSuffix(".0"))
+            }
+        val secondLineText =
+            listOfNotNull(
+                    containerText.takeIf(String::isNotBlank),
+                    codec.takeIf(String::isNotBlank),
+                    frameRateText,
+                )
+                .joinToString(" · ")
+        val thirdLineText =
+            formatId?.takeIf(String::isNotBlank)?.let {
+                stringResource(R.string.format_id_value, it)
+            }.orEmpty()
 
         FormatItem(
             modifier = modifier,
@@ -309,6 +326,7 @@ fun FormatItem(
             containsVideo = formatInfo.containsVideo(),
             firstLineText = firstLineText,
             secondLineText = secondLineText,
+            thirdLineText = thirdLineText,
             outlineColor = outlineColor,
             containerColor = containerColor,
             selected = selected,
@@ -327,6 +345,7 @@ fun FormatItem(
     containsVideo: Boolean = false,
     firstLineText: String,
     secondLineText: String,
+    thirdLineText: String = "",
     selected: Boolean = false,
     outlineColor: Color = MaterialTheme.colorScheme.primary,
     containerColor: Color = MaterialTheme.colorScheme.primaryContainer,
@@ -399,6 +418,16 @@ fun FormatItem(
                 if (secondLineText.isNotBlank()) {
                     Text(
                         text = secondLineText,
+                        style = MaterialTheme.typography.labelSmall,
+                        modifier = Modifier.padding(top = 2.dp),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+                if (thirdLineText.isNotBlank()) {
+                    Text(
+                        text = thirdLineText,
                         style = MaterialTheme.typography.labelSmall,
                         modifier = Modifier.padding(top = 2.dp),
                         color = MaterialTheme.colorScheme.onSurfaceVariant,

@@ -32,6 +32,8 @@
     <string name="audio_only_format">الصوت فقط</string>
     <string name="format_size_value">الحجم: %1$s</string>
     <string name="format_bitrate_value">معدل البت: %1$s</string>
+    <string name="format_fps_value">%1$s إطار/ث</string>
+    <string name="format_id_value">معرّف الصيغة: %1$s</string>
     <string name="checked">محدد</string>
     <string name="custom_command_template">قالب الأوامر</string>
     <string name="edit">تحرير</string>

@@ -73,7 +73,12 @@ class FormatPickerOptionsTest {
             )
 
         assertEquals(
-            listOf("video-webm-1080+audio-opus", "video-mp4-720+audio-m4a", "muxed-360"),
+            listOf(
+                "video-webm-1080+audio-opus",
+                "video-mp4-720+audio-m4a",
+                "muxed-360",
+                "video-unknown+audio-opus",
+            ),
             options.video.map { it.formatId },
         )
         assertEquals("opus", options.video[0].acodec)
@@ -82,7 +87,7 @@ class FormatPickerOptionsTest {
         assertEquals(1_200.0, options.video[1].fileSize!!, 0.0)
         assertEquals(2_100.0, options.video[0].fileSizeApprox!!, 0.0)
         assertEquals("1920×1080 (1080p)", options.video[0].videoQualityLabel())
-        assertFalse(options.video.any { it.formatId == "video-unknown" })
+        assertNull(options.video.last().videoQualityLabel())
     }
 
     @Test
@@ -104,7 +109,7 @@ class FormatPickerOptionsTest {
     }
 
     @Test
-    fun removesRecommendedResolutionFromVideoChoicesWithoutInventingOtherQualities() {
+    fun keepsEveryRealVideoFormatIncludingSameQualityAndUnknownResolution() {
         val audio = Format(formatId = "audio", acodec = "aac", vcodec = "none", abr = 128.0)
         val recommended360 =
             Format(
@@ -133,11 +138,15 @@ class FormatPickerOptionsTest {
         val options =
             formatPickerOptions(
                 formats = listOf(audio, recommended360, dash360, dash720, unknown),
-                recommendedFormats = listOf(recommended360),
             )
 
-        assertEquals(listOf("dash-720+audio"), options.video.map { it.formatId })
-        assertEquals("720p", options.video.single().videoQualityLabel())
+        assertEquals(
+            setOf("muxed-360", "dash-360+audio", "dash-720+audio", "unknown+audio"),
+            options.video.mapNotNull { it.formatId }.toSet(),
+        )
+        assertEquals(4, options.video.size)
+        assertEquals(2, options.video.count { it.videoQualityHeight() == 360 })
+        assertEquals("720p", options.video.first { it.formatId == "dash-720+audio" }.videoQualityLabel())
         assertNull(unknown.videoQualityLabel())
     }
 

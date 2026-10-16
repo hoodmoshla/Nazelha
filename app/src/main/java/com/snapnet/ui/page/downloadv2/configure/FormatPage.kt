@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
@@ -83,7 +84,6 @@ import com.snapnet.ui.component.FormatSubtitle
 import com.snapnet.ui.component.FormatVideoPreview
 import com.snapnet.ui.component.SealDialog
 import com.snapnet.ui.component.SealSearchBar
-import com.snapnet.ui.component.SuggestedFormatItem
 import com.snapnet.ui.component.TextButtonWithIcon
 import com.snapnet.ui.component.VideoFilterChip
 import com.snapnet.ui.page.download.VideoClipDialog
@@ -287,12 +287,10 @@ private fun FormatPageImpl(
 
     if (videoInfo.formats.isNullOrEmpty()) return
     val previewDuration = videoInfo.duration?.roundToInt() ?: 0
-    val suggestedFormats = remember(videoInfo) { videoInfo.requestedFormatList() }
     val pickerOptions =
-        remember(videoInfo.formats, suggestedFormats, videoInfo.duration) {
+        remember(videoInfo.formats, videoInfo.duration) {
             formatPickerOptions(
                 formats = videoInfo.formats.orEmpty(),
-                recommendedFormats = suggestedFormats,
                 durationSeconds = videoInfo.duration,
             )
         }
@@ -301,10 +299,6 @@ private fun FormatPageImpl(
 
     var audioOnlyItemLimit by remember { mutableIntStateOf(6) }
     var videoAudioItemLimit by remember { mutableIntStateOf(6) }
-
-    val isSuggestedFormatAvailable = suggestedFormats.isNotEmpty()
-
-    var isSuggestedFormatSelected by remember(videoInfo) { mutableStateOf(false) }
 
     var selectedVideoAudioFormat by remember(videoInfo) { mutableIntStateOf(NOT_SELECTED) }
     var selectedAudioOnlyFormat by remember(videoInfo) { mutableIntStateOf(NOT_SELECTED) }
@@ -354,23 +348,17 @@ private fun FormatPageImpl(
     }
 
     val formatList: List<Format> by
-        remember(videoInfo, suggestedFormats) {
+        remember(videoInfo) {
             derivedStateOf {
                 mutableListOf<Format>().apply {
-                    if (isSuggestedFormatSelected) {
-                        addAll(suggestedFormats)
-                    } else {
-                        audioOnlyFormats.getOrNull(selectedAudioOnlyFormat)?.let { add(it) }
-                        videoAudioFormats.getOrNull(selectedVideoAudioFormat)?.let { add(it) }
-                    }
+                    audioOnlyFormats.getOrNull(selectedAudioOnlyFormat)?.let { add(it) }
+                    videoAudioFormats.getOrNull(selectedVideoAudioFormat)?.let { add(it) }
                 }
             }
         }
 
     val isFormatSelected =
-        isSuggestedFormatSelected ||
-            selectedAudioOnlyFormat != NOT_SELECTED ||
-            selectedVideoAudioFormat != NOT_SELECTED
+        selectedAudioOnlyFormat != NOT_SELECTED || selectedVideoAudioFormat != NOT_SELECTED
 
     val selectedSubtitles =
         remember(videoInfo) { mutableStateListOf<String>().apply { addAll(selectedSubtitleCodes) } }
@@ -396,7 +384,11 @@ private fun FormatPageImpl(
             )
         },
         bottomBar = {
-            Surface(color = MaterialTheme.colorScheme.surface, tonalElevation = 3.dp) {
+            Surface(
+                modifier = Modifier.navigationBarsPadding(),
+                color = MaterialTheme.colorScheme.surface,
+                tonalElevation = 3.dp,
+            ) {
                 Button(
                     onClick = {
                         onDownloadPressed(
@@ -564,37 +556,6 @@ private fun FormatPageImpl(
                 }
             }
 
-            if (isSuggestedFormatAvailable) {
-                item(span = { GridItemSpan(maxLineSpan) }) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier =
-                            Modifier.padding(top = 12.dp, bottom = 4.dp).padding(horizontal = 12.dp),
-                    ) {
-                        FormatSubtitle(text = stringResource(R.string.suggested))
-                    }
-                }
-                item(span = { GridItemSpan(maxLineSpan) }) {
-                    val onClick = {
-                        isSuggestedFormatSelected = true
-                        selectedAudioOnlyFormat = NOT_SELECTED
-                        selectedVideoAudioFormat = NOT_SELECTED
-                    }
-
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        SuggestedFormatItem(
-                            modifier = Modifier.weight(1f),
-                            videoInfo = videoInfo,
-                            selected = isSuggestedFormatSelected,
-                            onClick = onClick,
-                        )
-                    }
-                }
-            }
-
             if (videoAudioFormats.isNotEmpty()) {
                 item(span = { GridItemSpan(maxLineSpan) }) {
                     Row(
@@ -624,7 +585,6 @@ private fun FormatPageImpl(
                     ) {
                         selectedVideoAudioFormat = index
                         selectedAudioOnlyFormat = NOT_SELECTED
-                        isSuggestedFormatSelected = false
                     }
                 }
             }
@@ -666,7 +626,6 @@ private fun FormatPageImpl(
                 ) {
                     selectedAudioOnlyFormat = index
                     selectedVideoAudioFormat = NOT_SELECTED
-                    isSuggestedFormatSelected = false
                 }
             }
             item { Spacer(modifier = Modifier.height(16.dp)) }

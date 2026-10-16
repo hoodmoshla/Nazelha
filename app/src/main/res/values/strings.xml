@@ -52,6 +52,8 @@
     <string name="resolution_unavailable">Resolution unavailable</string>
     <string name="format_size_value">Size: %1$s</string>
     <string name="format_bitrate_value">Bitrate: %1$s</string>
+    <string name="format_fps_value">%1$s fps</string>
+    <string name="format_id_value">Format ID: %1$s</string>
     <string name="checked">Checked</string>
     <string name="credits">Credits</string>
     <string name="credits_desc">Credits and libre software</string>
