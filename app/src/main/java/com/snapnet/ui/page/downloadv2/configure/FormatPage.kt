@@ -68,7 +68,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
@@ -389,7 +388,9 @@ private fun FormatPageImpl(
     Scaffold(
         modifier = modifier.fillMaxSize().nestedScroll(scrollBehavior.nestedScrollConnection),
         containerColor =
-            if (isSharedIntent) Color(0xFF151515) else MaterialTheme.colorScheme.background,
+            if (isSharedIntent) MaterialTheme.colorScheme.surfaceContainer
+            else MaterialTheme.colorScheme.background,
+        contentColor = MaterialTheme.colorScheme.onSurface,
         topBar = {
             TopAppBar(
                 title = {
@@ -412,7 +413,7 @@ private fun FormatPageImpl(
                 colors =
                     TopAppBarDefaults.topAppBarColors(
                         containerColor =
-                            if (isSharedIntent) Color(0xFF151515)
+                            if (isSharedIntent) MaterialTheme.colorScheme.surfaceContainer
                             else MaterialTheme.colorScheme.surface
                     ),
             )
@@ -421,8 +422,9 @@ private fun FormatPageImpl(
             Surface(
                 modifier = Modifier.navigationBarsPadding(),
                 color =
-                    if (isSharedIntent) Color(0xFF151515)
+                    if (isSharedIntent) MaterialTheme.colorScheme.surfaceContainer
                     else MaterialTheme.colorScheme.surface,
+                contentColor = MaterialTheme.colorScheme.onSurface,
                 tonalElevation = 3.dp,
             ) {
                 Button(
@@ -443,15 +445,7 @@ private fun FormatPageImpl(
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
                     enabled = isFormatSelected,
                     shape = if (isSharedIntent) CircleShape else MaterialTheme.shapes.medium,
-                    colors =
-                        if (isSharedIntent) {
-                            ButtonDefaults.buttonColors(
-                                containerColor = Color(0xFF303030),
-                                disabledContainerColor = Color(0xFF242424),
-                                contentColor = Color.White,
-                                disabledContentColor = Color(0xFF777777),
-                            )
-                        } else ButtonDefaults.buttonColors(),
+                    colors = ButtonDefaults.buttonColors(),
                 ) {
                     if (!isSharedIntent) {
                         Icon(
