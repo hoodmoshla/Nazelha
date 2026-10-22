@@ -84,7 +84,12 @@ class MainActivity : AppCompatActivity() {
                 url = url,
                 preferences =
                     DownloadUtil.DownloadPreferences.createFromPreferences()
-                        .copy(extractAudio = false),
+                        .copy(
+                            extractAudio = false,
+                            videoResolution = 0,
+                            formatSorting = false,
+                            sortingFields = "",
+                        ),
                 isSharedIntent = true,
             )
         )

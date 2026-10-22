@@ -6,6 +6,7 @@ import com.snapnet.database.objects.CommandTemplate
 import com.snapnet.download.DownloaderV2
 import com.snapnet.download.Task
 import com.snapnet.util.DownloadUtil
+import com.snapnet.util.NotificationUtil
 import com.snapnet.util.PlaylistResult
 import com.snapnet.util.VideoInfo
 import com.yausername.youtubedl_android.YoutubeDL
@@ -229,17 +230,20 @@ class DownloadDialogViewModel(private val downloader: DownloaderV2) : ViewModel(
     private fun cancel(): Boolean {
         return when (val state = sheetState) {
             is SheetState.Loading -> {
+                // Closing the preview must stop the fetch itself. Previously the process survived
+                // whenever yt-dlp rejected the cancel, leaving the progress notification running.
                 val res = YoutubeDL.destroyProcessById(id = state.taskKey)
-                if (res) {
-                    state.job.cancel()
-                }
-                return res
+                state.job.cancel()
+                NotificationUtil.cancelNotification(state.taskKey.hashCode())
+                NotificationUtil.cancelNotification(NotificationUtil.SERVICE_NOTIFICATION_ID)
+                return true
             }
             else -> false
         }
     }
 
     private fun resetSelectionState() {
+        cancel()
         mSelectionStateFlow.update { SelectionState.Idle }
     }
 }

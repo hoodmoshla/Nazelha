@@ -167,7 +167,7 @@ fun YouTubeStyleDownloadSheet(
         SheetTabs(selected = tab, palette = palette, onSelect = { tab = it })
         Spacer(Modifier.height(12.dp))
         LazyColumn(
-            modifier = Modifier.heightIn(max = 360.dp),
+            modifier = Modifier.heightIn(max = 180.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             if (tab == DownloadSheetTab.Video) {
@@ -404,7 +404,8 @@ private fun QualityRow(
                 )
             }
         }
-        originalSizeText(format)?.let { size ->
+        val size = originalSizeText(format)
+        if (!size.isNullOrBlank()) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(
                     Icons.Outlined.Description,
@@ -517,7 +518,7 @@ private fun DownloadNowButton(
             audioSelected -> stringResource(R.string.audio_only_format)
             else -> format?.videoQualityLevel()?.let { "${it}p" }.orEmpty()
         }
-    val size = format?.fileSize?.toFileSizeText()
+    val size = format?.let { originalSizeText(it) }
     val detail =
         when {
             !enabled -> ""

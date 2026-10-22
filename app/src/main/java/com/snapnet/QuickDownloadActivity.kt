@@ -52,7 +52,14 @@ class QuickDownloadActivity : ComponentActivity() {
     private fun openSharedUrl(url: String) {
         beginQuickShareWork()
         val preferences =
-            DownloadUtil.DownloadPreferences.createFromPreferences().copy(extractAudio = false)
+            DownloadUtil.DownloadPreferences.createFromPreferences()
+                .copy(
+                    extractAudio = false,
+                    // A preferred resolution sorter can drop lower real qualities from the share sheet.
+                    videoResolution = 0,
+                    formatSorting = false,
+                    sortingFields = "",
+                )
         viewModel.postAction(
             Action.FetchPlaylist(url = url, preferences = preferences, isSharedIntent = true)
         )
