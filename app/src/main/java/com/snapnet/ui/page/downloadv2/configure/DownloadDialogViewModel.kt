@@ -118,8 +118,11 @@ class DownloadDialogViewModel(private val downloader: DownloaderV2) : ViewModel(
 
     private fun fetchPlaylist(action: Action.FetchPlaylist) {
         val (url, preferences) = action
-
         mSelectionStateFlow.update { SelectionState.Idle }
+        if (action.isSharedIntent) {
+            fetchSharedFormats(action)
+            return
+        }
         val job =
             viewModelScope.launch(Dispatchers.IO, start = CoroutineStart.LAZY) {
                 DownloadUtil.getPlaylistOrVideoInfo(
@@ -152,6 +155,34 @@ class DownloadDialogViewModel(private val downloader: DownloaderV2) : ViewModel(
                     }
             }
         mSheetStateFlow.update { SheetState.Loading(taskKey = "FetchPlaylist_$url", job = job) }
+        mSheetValueFlow.update { SheetValue.Expanded }
+        job.start()
+    }
+
+    /** Shared links need the complete format list. A flat playlist request omits lower qualities. */
+    private fun fetchSharedFormats(action: Action.FetchPlaylist) {
+        val (url, preferences) = action
+        val taskKey = "FetchShared_$url"
+        val job =
+            viewModelScope.launch(Dispatchers.IO, start = CoroutineStart.LAZY) {
+                DownloadUtil.fetchVideoInfoFromUrl(
+                        url = url,
+                        preferences = preferences,
+                        taskKey = taskKey,
+                    )
+                    .onSuccess { info ->
+                        withContext(Dispatchers.Main) {
+                            mSelectionStateFlow.update {
+                                SelectionState.FormatSelection(info = info, isSharedIntent = true)
+                            }
+                            hideDialog()
+                        }
+                    }
+                    .onFailure { th ->
+                        mSheetStateFlow.update { SheetState.Error(action = action, throwable = th) }
+                    }
+            }
+        mSheetStateFlow.update { SheetState.Loading(taskKey = taskKey, job = job) }
         mSheetValueFlow.update { SheetValue.Expanded }
         job.start()
     }

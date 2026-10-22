@@ -8,9 +8,9 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -159,6 +159,7 @@ fun YouTubeStyleDownloadSheet(
         modifier =
             modifier
                 .fillMaxWidth()
+                .fillMaxHeight()
                 .background(palette.card)
                 .padding(horizontal = 14.dp, vertical = 8.dp)
     ) {
@@ -167,7 +168,7 @@ fun YouTubeStyleDownloadSheet(
         SheetTabs(selected = tab, palette = palette, onSelect = { tab = it })
         Spacer(Modifier.height(12.dp))
         LazyColumn(
-            modifier = Modifier.heightIn(max = 180.dp),
+            modifier = Modifier.weight(1f),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             if (tab == DownloadSheetTab.Video) {

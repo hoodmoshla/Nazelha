@@ -153,7 +153,11 @@ object DownloadUtil {
                     if (extractAudio) {
                         addOption("-x")
                     }
-                    applyFormatSorter(this@with, toFormatSorter())
+                    // Listing every quality must not apply a preferred-resolution sorter; it can omit
+                    // lower real qualities before the share sheet sees them.
+                    if (taskKey?.startsWith("FetchShared_") != true) {
+                        applyFormatSorter(this@with, toFormatSorter())
+                    }
                     if (cookies) {
                         enableCookies(userAgentString)
                     }

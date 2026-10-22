@@ -462,7 +462,7 @@ private fun ErrorPreview() {
 }
 
 private const val FORMAT_SHEET_COLLAPSED_FRACTION = 0.30f
-private const val FORMAT_SHEET_SHARED_INITIAL_FRACTION = 0.31f
+private const val FORMAT_SHEET_SHARED_INITIAL_FRACTION = 0.60f
 private const val FORMAT_SHEET_EXPANDED_FRACTION = 0.96f
 
 @Composable
