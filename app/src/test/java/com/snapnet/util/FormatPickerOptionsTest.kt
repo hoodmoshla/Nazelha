@@ -92,17 +92,17 @@ class FormatPickerOptionsTest {
             listOf("audio-high"),
             initialAudioFormatChoices(options.music).map { it.formatId },
         )
-        assertEquals(listOf(360, 480, 720, 1080), initialVideo.map { it.videoQualityLevel() })
+        assertEquals(listOf(360, 480, 720, 720, 1080), initialVideo.map { it.videoQualityLevel() })
         assertEquals(
-            listOf("video-360", "video-480", "alternate-720", "video-1080"),
+            options.video.sortedBy { it.videoQualityLevel() ?: Int.MAX_VALUE }.map { it.formatId },
             initialVideo.map { it.formatId },
         )
         assertEquals(5, options.video.size)
         assertTrue(options.video.all { it.containsAudio() && it.containsVideo() })
-        assertEquals(
-            listOf("portrait-720+audio-high"),
-            advancedVideoFormatChoices(options.video).map { it.formatId },
-        )
+        assertTrue(advancedVideoFormatChoices(options.video).isEmpty())
+        assertEquals(360, nearestStandardVideoQuality(368))
+        assertEquals(360, nearestStandardVideoQuality(404))
+        assertEquals(480, nearestStandardVideoQuality(430))
     }
 
     @Test

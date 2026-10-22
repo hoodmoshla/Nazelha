@@ -64,13 +64,16 @@ class QuickDownloadActivity : ComponentActivity() {
         App.setServiceWorkActive(DownloadWorkSource.QUICK_SHARE, true)
         quickShareWorkJob =
             lifecycleScope.launch(start = CoroutineStart.UNDISPATCHED) {
-                var observedLoading = false
                 combine(viewModel.sheetStateFlow, viewModel.selectionStateFlow) { sheet, selection ->
                     sheet to selection
                 }.collect { (state, selection) ->
-                    if (state is DownloadDialogViewModel.SheetState.Loading) {
-                        observedLoading = true
-                    } else if (observedLoading || selection !is SelectionState.Idle) {
+                    // Fetching media information is not a download. Stop as soon as the sheet can be
+                    // shown, or if fetching fails, so the service never lingers with an empty queue.
+                    val informationReady = selection !is SelectionState.Idle
+                    val fetchingFinished =
+                        state !is DownloadDialogViewModel.SheetState.Loading &&
+                            state !is DownloadDialogViewModel.SheetState.InputUrl
+                    if (informationReady || fetchingFinished) {
                         finishQuickShareWork()
                     }
                 }

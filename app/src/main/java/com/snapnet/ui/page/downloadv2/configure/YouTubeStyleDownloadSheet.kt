@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -51,8 +52,8 @@ import com.snapnet.R
 import com.snapnet.ui.common.AsyncImageImpl
 import com.snapnet.util.Format
 import com.snapnet.util.VideoInfo
-import com.snapnet.util.advancedVideoFormatChoices
 import com.snapnet.util.initialVideoFormatChoices
+import com.snapnet.util.nearestStandardVideoQuality
 import com.snapnet.util.toDurationText
 import com.snapnet.util.toFileSizeText
 import com.snapnet.util.toHttpsUrl
@@ -144,10 +145,8 @@ fun YouTubeStyleDownloadSheet(
     modifier: Modifier = Modifier,
 ) {
     val palette = rememberSheetPalette()
-    val compactVideo = remember(videoFormats) { initialVideoFormatChoices(videoFormats) }
-    val advancedVideo = remember(videoFormats) { advancedVideoFormatChoices(videoFormats) }
+    val visibleVideo = remember(videoFormats) { initialVideoFormatChoices(videoFormats) }
     var tab by remember(videoInfo) { mutableStateOf(DownloadSheetTab.Video) }
-    var advancedOpen by remember(videoInfo) { mutableStateOf(false) }
     val selectedFormat =
         when {
             selectedVideoIndex >= 0 -> videoFormats.getOrNull(selectedVideoIndex)
@@ -168,11 +167,11 @@ fun YouTubeStyleDownloadSheet(
         SheetTabs(selected = tab, palette = palette, onSelect = { tab = it })
         Spacer(Modifier.height(12.dp))
         LazyColumn(
-            modifier = Modifier.weight(1f, fill = false),
+            modifier = Modifier.heightIn(max = 360.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             if (tab == DownloadSheetTab.Video) {
-                items(compactVideo, key = { it.formatId ?: it.videoQualityLabel().orEmpty() }) {
+                items(visibleVideo, key = { it.formatId ?: it.videoQualityLabel().orEmpty() }) {
                     format ->
                     val index = videoFormats.indexOf(format)
                     QualityRow(
@@ -181,24 +180,6 @@ fun YouTubeStyleDownloadSheet(
                         palette = palette,
                         onClick = { if (index >= 0) onSelectVideo(index) },
                     )
-                }
-                if (advancedVideo.isNotEmpty()) {
-                    item(key = "advanced") {
-                        AdvancedHeader(expanded = advancedOpen, palette = palette) {
-                            advancedOpen = !advancedOpen
-                        }
-                    }
-                    if (advancedOpen) {
-                        items(advancedVideo, key = { "advanced-${it.formatId}" }) { format ->
-                            val index = videoFormats.indexOf(format)
-                            QualityRow(
-                                format = format,
-                                selected = index == selectedVideoIndex,
-                                palette = palette,
-                                onClick = { if (index >= 0) onSelectVideo(index) },
-                            )
-                        }
-                    }
                 }
             } else {
                 items(audioFormats, key = { it.formatId ?: "audio-${it.abr}-${it.fileSize}" }) {
@@ -369,6 +350,7 @@ private fun QualityRow(
     onClick: () -> Unit,
 ) {
     val level = format.videoQualityLevel()
+    val captionLevel = nearestStandardVideoQuality(level)
     val border = if (selected) palette.selectedBorder else Color.Transparent
     val fill = if (selected) palette.selectedFill else palette.row
     Row(
@@ -413,7 +395,7 @@ private fun QualityRow(
                     )
                 }
             }
-            qualityCaption(level)?.let {
+            qualityCaption(captionLevel)?.let {
                 Text(
                     it,
                     color = palette.muted,
@@ -514,36 +496,13 @@ private fun qualityCaption(level: Int?): String? =
         else -> null
     }
 
-/** Original source size only. Approximate and missing sizes stay blank, never labeled "about". */
+/**
+ * Shows a size only when the source reported one. `fileSizeApprox` is yt-dlp's own reported value,
+ * not a bitrate estimate. Missing sizes stay blank and are never labeled "about".
+ */
 @Composable
-private fun originalSizeText(format: Format): String? = format.fileSize?.toFileSizeText()
-
-@Composable
-private fun AdvancedHeader(expanded: Boolean, palette: SheetPalette, onClick: () -> Unit) {
-    Row(
-        modifier =
-            Modifier.fillMaxWidth()
-                .clip(RoundedCornerShape(14.dp))
-                .background(palette.row)
-                .clickable(onClick = onClick)
-                .padding(horizontal = 14.dp, vertical = 14.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Icon(Icons.Outlined.Settings, null, tint = palette.muted, modifier = Modifier.size(20.dp))
-        Text(
-            stringResource(R.string.advanced_download_options),
-            color = palette.text,
-            fontSize = 16.sp,
-            fontWeight = FontWeight.Medium,
-            modifier = Modifier.weight(1f).padding(start = 10.dp),
-        )
-        Icon(
-            if (expanded) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore,
-            contentDescription = null,
-            tint = palette.muted,
-        )
-    }
-}
+private fun originalSizeText(format: Format): String? =
+    (format.fileSize ?: format.fileSizeApprox)?.takeIf { it > 0.0 }?.toFileSizeText()
 
 @Composable
 private fun DownloadNowButton(

@@ -127,19 +127,17 @@ class DownloadService : Service() {
     fun stopForegroundCompat() {
         runCatching {
                 if (isForeground) {
+                    val notificationToClear = foregroundNotificationId
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
                         stopForeground(
-                            if (foregroundNotificationId == SERVICE_NOTIFICATION_ID) {
-                                STOP_FOREGROUND_REMOVE
-                            } else {
-                                STOP_FOREGROUND_DETACH
-                            }
+                            STOP_FOREGROUND_REMOVE
                         )
                     } else {
                         @Suppress("DEPRECATION") stopForeground(true)
                     }
                     isForeground = false
                     foregroundNotificationId = SERVICE_NOTIFICATION_ID
+                    NotificationUtil.cancelNotification(notificationToClear)
                 }
                 stopSelf()
             }

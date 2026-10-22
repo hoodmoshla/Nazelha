@@ -59,16 +59,21 @@ fun initialAudioFormatChoices(formats: List<Format>): List<Format> = formats.tak
 /** Common real video qualities shown directly, from lowest to highest. */
 val COMPACT_VIDEO_QUALITY_LEVELS = listOf(360, 480, 720, 1080)
 
-/** One best real video-with-audio format for each common quality in the compact initial view. */
+/**
+ * Every real video choice, shown directly from lowest to highest. A nearby non-standard height, such
+ * as 368, stays its own row and is mapped only to the nearest standard caption; nothing is hidden or
+ * invented.
+ */
 fun initialVideoFormatChoices(formats: List<Format>): List<Format> =
-    COMPACT_VIDEO_QUALITY_LEVELS.mapNotNull { quality ->
-        formats.firstOrNull { it.videoQualityLevel() == quality }
-    }
+    formats.sortedWith(compareBy<Format> { it.videoQualityLevel() ?: Int.MAX_VALUE }.thenBy { it.tbr ?: 0.0 })
 
-/** Real formats above the compact view, kept available without inventing a quality. */
-fun advancedVideoFormatChoices(formats: List<Format>): List<Format> {
-    val compactIds = initialVideoFormatChoices(formats).mapNotNull { it.formatId }.toSet()
-    return formats.filter { it.formatId !in compactIds }
+/** No video choice is deferred behind an extra disclosure. */
+fun advancedVideoFormatChoices(formats: List<Format>): List<Format> = emptyList()
+
+/** Maps a real height to the nearest common caption without renaming the actual stream. */
+fun nearestStandardVideoQuality(level: Int?): Int? {
+    if (level == null || level <= 0) return null
+    return COMPACT_VIDEO_QUALITY_LEVELS.minByOrNull { kotlin.math.abs(it - level) }
 }
 
 /** A title based only on resolution reported by yt-dlp; returns null rather than inventing one. */

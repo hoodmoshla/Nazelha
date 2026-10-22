@@ -172,8 +172,7 @@ class DownloaderV2Impl(private val appContext: Context) : DownloaderV2, KoinComp
     }
 
     private fun Map<Task, Task.State>.countActiveWork(): Int = count { (_, state) ->
-        state.downloadState == Idle ||
-            state.downloadState == ReadyWithInfo ||
+        state.downloadState == ReadyWithInfo ||
             state.downloadState is Running ||
             state.downloadState is FetchingInfo
     }
