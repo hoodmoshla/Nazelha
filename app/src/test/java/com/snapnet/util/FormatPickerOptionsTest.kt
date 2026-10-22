@@ -190,6 +190,20 @@ class FormatPickerOptionsTest {
     }
 
     @Test
+    fun derivesOneFileSizeFromSourceBitrateAndDurationWithoutInventingMissingData() {
+        val video =
+            Format(formatId = "video", acodec = "none", vcodec = "avc1", height = 720.0, vbr = 800.0)
+        val audio = Format(formatId = "audio", acodec = "aac", vcodec = "none", abr = 128.0)
+
+        val sized = formatPickerOptions(listOf(video, audio), durationSeconds = 10.0).video.single()
+        // (800 + 128) kbps for 10 seconds.
+        assertEquals(1_160_000.0, sized.resolvedFileSizeBytes()!!, 0.0)
+
+        val noBasis = Format(formatId = "plain", acodec = "aac", vcodec = "avc1", height = 360.0)
+        assertNull(noBasis.resolvedFileSizeBytes(durationSeconds = 10.0))
+    }
+
+    @Test
     fun keepsAudioAlternativesAndChoosesTheHighestQualityForTheInitialView() {
         val low = Format(formatId = "audio-low", acodec = "opus", vcodec = "none", abr = 96.0)
         val high = Format(formatId = "audio-high", acodec = "opus", vcodec = "none", abr = 256.0)
@@ -290,7 +304,7 @@ class FormatPickerOptionsTest {
     }
 
     @Test
-    fun keepsOnlyOriginalSizesAndLeavesMissingSizesBlank() {
+    fun derivesMissingSizeFromSourceBitrateAndDuration() {
         val audio = Format(formatId = "audio", acodec = "aac", vcodec = "none", abr = 128.0)
         val video =
             Format(
@@ -304,7 +318,7 @@ class FormatPickerOptionsTest {
         val unsized =
             formatPickerOptions(listOf(video, audio), durationSeconds = 60.0).video.single()
 
-        assertNull(unsized.fileSize)
+        assertEquals(6_960_000.0, unsized.fileSize!!, 0.0)
         assertNull(unsized.fileSizeApprox)
     }
 

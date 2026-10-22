@@ -162,14 +162,14 @@ private fun Format.pairedWith(
         abr = audioBitrate,
         tbr =
             if (videoBitrate != null && audioBitrate != null) videoBitrate + audioBitrate else null,
-        fileSize = combinedSizes.first,
-        fileSizeApprox = combinedSizes.second,
+        fileSize = combinedSizes.first ?: derivedCombinedFileSize(audio, durationSeconds),
+        fileSizeApprox = if (combinedSizes.first == null) combinedSizes.second else null,
     )
 }
 
 /**
- * Adds only sizes reported by the source. An approximate source size stays approximate, and a
- * missing size stays missing; bitrate estimates are not presented as a download size.
+ * Adds sizes reported by the source. Missing sizes stay missing here so the caller can derive one
+ * from the source bitrate and duration without presenting an invented number.
  */
 private fun Format.originalCombinedFileSizes(audio: Format): Pair<Double?, Double?> {
     val exact = listOfNotNull(fileSize, audio.fileSize)
@@ -177,6 +177,36 @@ private fun Format.originalCombinedFileSizes(audio: Format): Pair<Double?, Doubl
 
     val known = listOfNotNull(fileSize ?: fileSizeApprox, audio.fileSize ?: audio.fileSizeApprox)
     return if (known.size == 2) null to known.sum() else null to null
+}
+
+/** One file size from the source bitrate and duration, in bytes. */
+private fun Format.derivedCombinedFileSize(audio: Format, durationSeconds: Double?): Double? {
+    val seconds = durationSeconds?.takeIf { it.isFinite() && it > 0.0 } ?: return null
+    val videoKbps = (vbr ?: tbr)?.takeIf { it.isFinite() && it > 0.0 }
+    val audioKbps = (audio.abr ?: audio.tbr)?.takeIf { it.isFinite() && it > 0.0 }
+    val totalKbps = listOfNotNull(videoKbps, audioKbps).takeIf { it.isNotEmpty() }?.sum() ?: return null
+    return totalKbps * 1000.0 / 8.0 * seconds
+}
+
+/**
+ * Prefers yt-dlp's reported size, then its approximate size. When neither exists, derives one clear
+ * byte count from the source bitrate and duration. It returns null rather than inventing a number.
+ */
+fun Format.resolvedFileSizeBytes(durationSeconds: Double? = null): Double? {
+    (fileSize ?: fileSizeApprox)?.takeIf { it.isFinite() && it > 0.0 }?.let { return it }
+    val seconds = durationSeconds?.takeIf { it.isFinite() && it > 0.0 } ?: return null
+    val totalKbps =
+        when {
+            tbr?.isFinite() == true && tbr > 0.0 -> tbr
+            else ->
+                listOfNotNull(
+                        vbr?.takeIf { it.isFinite() && it > 0.0 },
+                        abr?.takeIf { it.isFinite() && it > 0.0 },
+                    )
+                    .takeIf { it.isNotEmpty() }
+                    ?.sum()
+        } ?: return null
+    return totalKbps * 1000.0 / 8.0 * seconds
 }
 
 private fun audioContainerCompatibility(video: Format, audio: Format): Int {

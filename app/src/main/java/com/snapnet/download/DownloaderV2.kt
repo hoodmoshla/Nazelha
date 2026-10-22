@@ -25,6 +25,7 @@ import com.snapnet.util.FileUtil
 import com.snapnet.util.NotificationUtil
 import com.snapnet.util.PreferenceUtil
 import com.snapnet.util.VideoInfo
+import com.snapnet.util.resolvedFileSizeBytes
 import com.yausername.youtubedl_android.YoutubeDL
 import kotlin.collections.component1
 import kotlin.collections.component2
@@ -333,14 +334,15 @@ class DownloaderV2Impl(private val appContext: Context) : DownloaderV2, KoinComp
                         downloadPreferences = preferences,
                         progressCallback = { progressPercentage, _, text ->
                             val progress = progressPercentage / 100f
+                            val progressLabel = downloadSizeLabel(text)
                             when (val preState = downloadState) {
                                 is Running -> {
                                     downloadState =
-                                        preState.copy(progress = progress, progressText = text)
+                                        preState.copy(progress = progress, progressText = progressLabel)
                                     NotificationUtil.notifyProgress(
                                         notificationId = notificationId,
                                         progress = progressPercentage.toInt(),
-                                        text = text,
+                                        text = progressLabel,
                                         title = viewState.title,
                                         taskId = id,
                                     )
@@ -562,5 +564,13 @@ class DownloaderV2Impl(private val appContext: Context) : DownloaderV2, KoinComp
             notificationId = notificationId,
             report = cause.stackTraceToString(),
         )
+    }
+
+    /** Adds the selected file size once, without replacing yt-dlp's own progress text. */
+    private fun Task.downloadSizeLabel(progressText: String): String {
+        val bytes = info?.fileSize ?: viewState.fileSizeApprox
+        if (bytes <= 0.0) return progressText
+        val size = appContext.getString(R.string.filesize_mb).format(bytes / (1024.0 * 1024.0))
+        return if (progressText.contains(size)) progressText else "$progressText · $size"
     }
 }

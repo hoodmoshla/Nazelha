@@ -9,6 +9,7 @@ import com.snapnet.util.PlaylistResult
 import com.snapnet.util.VideoClip
 import com.snapnet.util.VideoInfo
 import kotlin.math.roundToInt
+import com.snapnet.util.resolvedFileSizeBytes
 
 object TaskFactory {
     /**
@@ -27,7 +28,7 @@ object TaskFactory {
     ): TaskWithState {
         val fileSize =
             formatList.fold(.0) { acc, format ->
-                acc + (format.fileSize ?: format.fileSizeApprox ?: .0)
+                acc + (format.resolvedFileSizeBytes(videoInfo.duration) ?: .0)
             }
 
         val info =

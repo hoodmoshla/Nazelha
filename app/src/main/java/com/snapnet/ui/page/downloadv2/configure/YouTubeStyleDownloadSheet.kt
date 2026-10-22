@@ -54,6 +54,7 @@ import com.snapnet.util.Format
 import com.snapnet.util.VideoInfo
 import com.snapnet.util.initialVideoFormatChoices
 import com.snapnet.util.nearestStandardVideoQuality
+import com.snapnet.util.resolvedFileSizeBytes
 import com.snapnet.util.toDurationText
 import com.snapnet.util.toFileSizeText
 import com.snapnet.util.toHttpsUrl
@@ -499,12 +500,12 @@ private fun qualityCaption(level: Int?): String? =
     }
 
 /**
- * Shows a size only when the source reported one. `fileSizeApprox` is yt-dlp's own reported value,
- * not a bitrate estimate. Missing sizes stay blank and are never labeled "about".
+ * Prefers a source-reported size. Otherwise shows one size derived from the source bitrate and
+ * duration, without labeling it "about". Missing data stays blank.
  */
 @Composable
 private fun originalSizeText(format: Format): String? =
-    (format.fileSize ?: format.fileSizeApprox)?.takeIf { it > 0.0 }?.toFileSizeText()
+    format.resolvedFileSizeBytes()?.takeIf { it > 0.0 }?.toFileSizeText()
 
 @Composable
 private fun DownloadNowButton(
