@@ -48,8 +48,8 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.RangeSliderState
 import androidx.compose.material3.RadioButton
+import androidx.compose.material3.RangeSliderState
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -68,6 +68,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
@@ -110,8 +111,8 @@ import com.snapnet.util.VideoInfo
 import com.snapnet.util.formatPickerOptions
 import com.snapnet.util.initialAudioFormatChoices
 import com.snapnet.util.initialVideoFormatChoices
-import com.snapnet.util.toHttpsUrl
 import com.snapnet.util.toFileSizeText
+import com.snapnet.util.toHttpsUrl
 import com.snapnet.util.videoQualityLevel
 import kotlin.math.roundToInt
 import kotlinx.coroutines.delay
@@ -306,8 +307,16 @@ private fun FormatPageImpl(
         }
     val audioOnlyFormats = pickerOptions.music
     val videoAudioFormats = pickerOptions.video
+    val preferredSharedVideoIndex =
+        remember(videoAudioFormats) {
+            val compact = initialVideoFormatChoices(videoAudioFormats)
+            val preferred =
+                compact.firstOrNull { it.videoQualityLevel() == 480 } ?: compact.firstOrNull()
+            preferred?.let(videoAudioFormats::indexOf) ?: NOT_SELECTED
+        }
 
-    val initialAudioOnlyFormats = remember(audioOnlyFormats) { initialAudioFormatChoices(audioOnlyFormats) }
+    val initialAudioOnlyFormats =
+        remember(audioOnlyFormats) { initialAudioFormatChoices(audioOnlyFormats) }
     val initialVideoAudioFormats =
         remember(videoAudioFormats, isSharedIntent) {
             if (isSharedIntent) initialVideoFormatChoices(videoAudioFormats)
@@ -320,7 +329,10 @@ private fun FormatPageImpl(
     val visibleVideoAudioFormats =
         if (showAllVideoAudioFormats) videoAudioFormats else initialVideoAudioFormats
 
-    var selectedVideoAudioFormat by remember(videoInfo) { mutableIntStateOf(NOT_SELECTED) }
+    var selectedVideoAudioFormat by
+        remember(videoInfo, isSharedIntent) {
+            mutableIntStateOf(if (isSharedIntent) preferredSharedVideoIndex else NOT_SELECTED)
+        }
     var selectedAudioOnlyFormat by remember(videoInfo) { mutableIntStateOf(NOT_SELECTED) }
     val context = LocalContext.current
 
@@ -388,10 +400,10 @@ private fun FormatPageImpl(
     Scaffold(
         modifier = modifier.fillMaxSize().nestedScroll(scrollBehavior.nestedScrollConnection),
         containerColor =
-            if (isSharedIntent) MaterialTheme.colorScheme.surfaceContainer
-            else MaterialTheme.colorScheme.background,
+            if (isSharedIntent) Color.Transparent else MaterialTheme.colorScheme.background,
         contentColor = MaterialTheme.colorScheme.onSurface,
         topBar = {
+            if (isSharedIntent) return@Scaffold
             TopAppBar(
                 title = {
                     Text(
@@ -419,6 +431,7 @@ private fun FormatPageImpl(
             )
         },
         bottomBar = {
+            if (isSharedIntent) return@Scaffold
             Surface(
                 modifier = Modifier.navigationBarsPadding(),
                 color =
@@ -442,7 +455,8 @@ private fun FormatPageImpl(
                             )
                         )
                     },
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+                    modifier =
+                        Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
                     enabled = isFormatSelected,
                     shape = if (isSharedIntent) CircleShape else MaterialTheme.shapes.medium,
                     colors = ButtonDefaults.buttonColors(),
@@ -460,6 +474,38 @@ private fun FormatPageImpl(
             }
         },
     ) { paddingValues ->
+        if (isSharedIntent) {
+            YouTubeStyleDownloadSheet(
+                modifier = Modifier.padding(paddingValues),
+                videoInfo = videoInfo,
+                videoFormats = videoAudioFormats,
+                audioFormats = audioOnlyFormats,
+                selectedVideoIndex = selectedVideoAudioFormat,
+                selectedAudioIndex = selectedAudioOnlyFormat,
+                onSelectVideo = {
+                    selectedVideoAudioFormat = it
+                    selectedAudioOnlyFormat = NOT_SELECTED
+                },
+                onSelectAudio = {
+                    selectedAudioOnlyFormat = it
+                    selectedVideoAudioFormat = NOT_SELECTED
+                },
+                onDismiss = onNavigateBack,
+                onDownload = {
+                    onDownloadPressed(
+                        FormatConfig(
+                            formatList = formatList,
+                            videoClips = emptyList(),
+                            splitByChapter = false,
+                            newTitle = videoTitle,
+                            selectedSubtitles = selectedSubtitles,
+                            selectedAutoCaptions = selectedAutoCaptions,
+                        )
+                    )
+                },
+            )
+            return@Scaffold
+        }
         LazyVerticalGrid(
             modifier = Modifier.padding(paddingValues),
             verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -769,8 +815,7 @@ private fun SharedFormatChoiceRow(
     onClick: () -> Unit,
 ) {
     val size = formatInfo.fileSize ?: formatInfo.fileSizeApprox
-    val sizeLabel =
-        size?.toFileSizeText()?.let { if (formatInfo.fileSize == null) "≈ $it" else it }
+    val sizeLabel = size?.toFileSizeText()?.let { if (formatInfo.fileSize == null) "≈ $it" else it }
     val label =
         if (isVideo) {
             formatInfo.videoQualityLevel()?.let { "${it}p" }

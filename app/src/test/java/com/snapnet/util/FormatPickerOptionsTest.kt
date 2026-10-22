@@ -1,7 +1,6 @@
 package com.snapnet.util
 
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -26,7 +25,8 @@ class FormatPickerOptionsTest {
     @Test
     fun keepsAudioAlternativesAndShowsOnlyOneAudioAndCommonVideoTiersInitially() {
         val audioLow = Format(formatId = "audio-low", acodec = "aac", vcodec = "none", abr = 96.0)
-        val audioHigh = Format(formatId = "audio-high", acodec = "aac", vcodec = "none", abr = 192.0)
+        val audioHigh =
+            Format(formatId = "audio-high", acodec = "aac", vcodec = "none", abr = 192.0)
         val video1080 =
             Format(
                 formatId = "video-1080",
@@ -75,16 +75,34 @@ class FormatPickerOptionsTest {
 
         val options =
             formatPickerOptions(
-                listOf(audioLow, audioHigh, video1080, portrait720, alternate720, video480, video360)
+                listOf(
+                    audioLow,
+                    audioHigh,
+                    video1080,
+                    portrait720,
+                    alternate720,
+                    video480,
+                    video360,
+                )
             )
         val initialVideo = initialVideoFormatChoices(options.video)
 
         assertEquals(listOf("audio-high", "audio-low"), options.music.map { it.formatId })
-        assertEquals(listOf("audio-high"), initialAudioFormatChoices(options.music).map { it.formatId })
-        assertEquals(listOf(720, 480, 360), initialVideo.map { it.videoQualityLevel() })
-        assertEquals(listOf("alternate-720", "video-480", "video-360"), initialVideo.map { it.formatId })
+        assertEquals(
+            listOf("audio-high"),
+            initialAudioFormatChoices(options.music).map { it.formatId },
+        )
+        assertEquals(listOf(360, 480, 720, 1080), initialVideo.map { it.videoQualityLevel() })
+        assertEquals(
+            listOf("video-360", "video-480", "alternate-720", "video-1080"),
+            initialVideo.map { it.formatId },
+        )
         assertEquals(5, options.video.size)
         assertTrue(options.video.all { it.containsAudio() && it.containsVideo() })
+        assertEquals(
+            listOf("portrait-720+audio-high"),
+            advancedVideoFormatChoices(options.video).map { it.formatId },
+        )
     }
 
     @Test
@@ -148,7 +166,8 @@ class FormatPickerOptionsTest {
 
         val options =
             formatPickerOptions(
-                formats = listOf(dashMp4, audioOpus, muxed, unreportedResolution, audioM4a, dashWebm),
+                formats =
+                    listOf(dashMp4, audioOpus, muxed, unreportedResolution, audioM4a, dashWebm),
                 durationSeconds = 10.0,
             )
 
@@ -174,18 +193,15 @@ class FormatPickerOptionsTest {
     fun keepsAudioAlternativesAndChoosesTheHighestQualityForTheInitialView() {
         val low = Format(formatId = "audio-low", acodec = "opus", vcodec = "none", abr = 96.0)
         val high = Format(formatId = "audio-high", acodec = "opus", vcodec = "none", abr = 256.0)
-        val video =
-            Format(
-                formatId = "video-720",
-                acodec = "none",
-                vcodec = "avc1",
-                height = 720.0,
-            )
+        val video = Format(formatId = "video-720", acodec = "none", vcodec = "avc1", height = 720.0)
 
         val options = formatPickerOptions(listOf(low, video, high))
 
         assertEquals(listOf("audio-high", "audio-low"), options.music.map { it.formatId })
-        assertEquals(listOf("audio-high"), initialAudioFormatChoices(options.music).map { it.formatId })
+        assertEquals(
+            listOf("audio-high"),
+            initialAudioFormatChoices(options.music).map { it.formatId },
+        )
         assertEquals(listOf("video-720+audio-high"), options.video.map { it.formatId })
     }
 
@@ -200,26 +216,14 @@ class FormatPickerOptionsTest {
                 format = "18 - 640x360 (360p)",
             )
         val dash360 =
-            Format(
-                formatId = "dash-360",
-                acodec = "none",
-                vcodec = "avc1",
-                resolution = "640x360",
-            )
+            Format(formatId = "dash-360", acodec = "none", vcodec = "avc1", resolution = "640x360")
         val dash720 =
-            Format(
-                formatId = "dash-720",
-                acodec = "none",
-                vcodec = "avc1",
-                formatNote = "720p",
-            )
+            Format(formatId = "dash-720", acodec = "none", vcodec = "avc1", formatNote = "720p")
         val unknown =
             Format(formatId = "unknown", format = "hd - unknown", acodec = "none", vcodec = "avc1")
 
         val options =
-            formatPickerOptions(
-                formats = listOf(audio, recommended360, dash360, dash720, unknown),
-            )
+            formatPickerOptions(formats = listOf(audio, recommended360, dash360, dash720, unknown))
 
         assertEquals(
             setOf("muxed-360", "dash-360+audio", "dash-720+audio", "unknown+audio"),
@@ -227,7 +231,10 @@ class FormatPickerOptionsTest {
         )
         assertEquals(4, options.video.size)
         assertEquals(2, options.video.count { it.videoQualityHeight() == 360 })
-        assertEquals("720p", options.video.first { it.formatId == "dash-720+audio" }.videoQualityLabel())
+        assertEquals(
+            "720p",
+            options.video.first { it.formatId == "dash-720+audio" }.videoQualityLabel(),
+        )
         assertNull(unknown.videoQualityLabel())
     }
 
@@ -283,7 +290,7 @@ class FormatPickerOptionsTest {
     }
 
     @Test
-    fun estimatesCombinedSizeOnlyWhenBothStreamsHaveUsableSizeData() {
+    fun keepsOnlyOriginalSizesAndLeavesMissingSizesBlank() {
         val audio = Format(formatId = "audio", acodec = "aac", vcodec = "none", abr = 128.0)
         val video =
             Format(
@@ -294,9 +301,43 @@ class FormatPickerOptionsTest {
                 vbr = 800.0,
             )
 
-        val estimated = formatPickerOptions(listOf(video, audio), durationSeconds = 60.0).video.single()
+        val unsized =
+            formatPickerOptions(listOf(video, audio), durationSeconds = 60.0).video.single()
 
-        assertNull(estimated.fileSize)
-        assertEquals(6_960_000.0, estimated.fileSizeApprox!!, 0.0)
+        assertNull(unsized.fileSize)
+        assertNull(unsized.fileSizeApprox)
+    }
+
+    @Test
+    fun sumsOriginalSizesWithoutInventingTheMissingHalf() {
+        val exactAudio =
+            Format(formatId = "audio", acodec = "aac", vcodec = "none", fileSize = 10.0)
+        val exactVideo =
+            Format(
+                formatId = "video",
+                acodec = "none",
+                vcodec = "avc1",
+                height = 480.0,
+                fileSize = 90.0,
+            )
+        val exact = formatPickerOptions(listOf(exactVideo, exactAudio)).video.single()
+
+        assertEquals(100.0, exact.fileSize!!, 0.0)
+        assertNull(exact.fileSizeApprox)
+
+        val partialAudio =
+            Format(formatId = "audio", acodec = "aac", vcodec = "none", fileSize = 10.0)
+        val partialVideo =
+            Format(
+                formatId = "video",
+                acodec = "none",
+                vcodec = "avc1",
+                height = 480.0,
+                fileSizeApprox = 90.0,
+            )
+        val partial = formatPickerOptions(listOf(partialVideo, partialAudio)).video.single()
+
+        assertNull(partial.fileSize)
+        assertEquals(100.0, partial.fileSizeApprox!!, 0.0)
     }
 }

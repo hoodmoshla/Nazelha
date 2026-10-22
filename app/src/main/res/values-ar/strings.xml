@@ -463,4 +463,17 @@
     <string name="more_formats">المزيد من الصيغ</string>
     <string name="download_notification_disabled_desc">إشعارات التطبيق معطّلة في إعدادات Android. اضغط لفتح إعدادات إشعارات التطبيق.</string>
     <string name="dark_theme_follow_system_desc">عند اختيار «النظام»، يتبع SnapNet مظهر الجهاز وجدولته، بما في ذلك الوضع الداكن من الغروب إلى الشروق إذا كان مفعّلًا على الجهاز.</string>
+    <string name="advanced_download_options">خيارات متقدمة</string>
+    <string name="download_now">تنزيل الآن</string>
+    <string name="selected_quality_size">%1$s · %2$s</string>
+    <string name="video_views_count">%1$s مشاهدة</string>
+    <string name="quality_360_caption">جودة اقتصادية</string>
+    <string name="quality_480_caption">جودة متوازنة</string>
+    <string name="quality_720_caption">وضوح أعلى</string>
+    <string name="quality_1080_caption">وضوح ممتاز</string>
+    <string name="quality_1440_caption">أعلى دقة</string>
+    <string name="quality_badge_hd">HD</string>
+    <string name="quality_badge_full_hd">Full HD</string>
+    <string name="quality_badge_2k">2K</string>
+    <string name="quality_badge_4k">4K</string>
 </resources>
