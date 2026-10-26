@@ -26,3 +26,5 @@ local.properties
 *.pw
 signing-info*
 SIGNING-README*
+# Local-only migration evidence, logs and APK handoff copy
+/.local-verification/
