@@ -1,0 +1,26 @@
+{
+  "source_repository": "https://github.com/hoodmoshla/SnapNet",
+  "baseline_tag": "v1.0.5",
+  "baseline_commit": "07929caf3cba21ebf7efefd244d939d4887cf4db",
+  "source_experimental_branch": "feature/direct-http-downloads-stage1-2026-10-27",
+  "source_changes_were_uncommitted": true,
+  "imported_file_count": 11,
+  "imported_files_sha256": {
+    "app/src/main/java/com/snapnet/download/DownloaderV2.kt": "c8d5bee16fc79685964c8c16667717f19fb5188df196fd1802203dad3b2914d8",
+    "app/src/main/java/com/snapnet/download/Task.kt": "1eaf57078b9af3038c23e50e3e15809f5c5408e7facf6c0ec02804f5b990e33b",
+    "app/src/main/java/com/snapnet/download/TaskFactory.kt": "abeb2f274099cb2a31939549aecae9ba7c16f21c2f4da6c31b8fb3f2a89bd158",
+    "app/src/main/java/com/snapnet/download/http/DirectHttpDownloader.kt": "5eafa7c571cb90552a6ff9048d4036f4f7cacd9e2d93c747370602163196b4b2",
+    "app/src/main/java/com/snapnet/download/http/DirectHttpFile.kt": "68fd611eefe9b3ec79d4bca4ac1979826cc4cd2bdf690de922d8bb66e8a406e5",
+    "app/src/main/java/com/snapnet/download/http/DirectHttpLinkResolver.kt": "c9cf985d1f5334267fd95b2a8f4abe58167095181355b1c89dd5ea4833ff9eeb",
+    "app/src/main/java/com/snapnet/ui/page/downloadv2/configure/DownloadDialogV2.kt": "17fd291811fa73f879c33a8d47c84f295aa3a9593e53fd640059f38a577a17fc",
+    "app/src/main/java/com/snapnet/ui/page/downloadv2/configure/DownloadDialogViewModel.kt": "d9321167fd1a58e97507ec38757e17c573a223e43dc2730b6160c0e3964a31c6",
+    "app/src/main/res/values/strings.xml": "13947d198c254ec6ecae7898185cd961f5f0ffe5bd26c6615469cf9a6b361ed2",
+    "app/src/test/java/com/snapnet/download/http/DirectHttpTransferTest.kt": "7a96d4b9f203c5266a3c98033423cb500562afc1a6a2c911169614fbd27630ce",
+    "app/src/test/java/com/snapnet/download/http/TestHttpServer.kt": "fb9f5a9cd6cdfd3ca64fba8c48df04a07592bf659a050f2497b8224c5c628493"
+  },
+  "entire_source_snapshot_file_count": 426,
+  "entire_source_snapshot_sha256": "557fea896f094858cc492a68b15c686fd2896c588d07f37b863cebd04918d782",
+  "entire_source_snapshot_matched_before_nazelha_docs_and_ci_isolation": true,
+  "signing_material_copied": false,
+  "original_apk_reused_byte_for_byte": true
+}

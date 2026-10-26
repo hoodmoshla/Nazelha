@@ -118,6 +118,11 @@
     <string name="execute_command_notification">Running custom commands…</string>
     <string name="battery_settings_desc">"Please set battery usage of this app to \"Unrestricted\" in the system settings to download in the background."
     </string>
+    <string name="direct_file_preview">Direct file preview</string>
+    <string name="direct_file_name">File name: %1$s</string>
+    <string name="direct_file_type">File type: %1$s</string>
+    <string name="direct_file_size">File size: %1$s</string>
+    <string name="direct_file_size_unknown">Unknown</string>
     <string name="concurrent_download">Multi-threaded download</string>
     <string name="concurrent_download_desc">Download more parts of M3U8/MPD videos in parallel</string>
     <string name="concurrent_download_num">%d thread(s) would be used to download DASH/HLS native video concurrently.</string>

@@ -1,6 +1,7 @@
 package com.snapnet.download
 
 import com.snapnet.database.objects.CommandTemplate
+import com.snapnet.download.http.DirectHttpFile
 import com.snapnet.download.Task.TypeInfo
 import com.snapnet.download.Task.ViewState
 import com.snapnet.util.DownloadUtil
@@ -17,6 +18,7 @@ private val TypeInfo.id: String
         when (this) {
             is TypeInfo.CustomCommand -> "${template.id}_${template.name}"
             is TypeInfo.Playlist -> "$index"
+            TypeInfo.DirectHttpFile -> "direct-http-file"
             TypeInfo.URL -> ""
         }
 
@@ -44,6 +46,8 @@ data class Task(
 
         @Serializable data class CustomCommand(val template: CommandTemplate) : TypeInfo
 
+        @Serializable data object DirectHttpFile : TypeInfo
+
         @Serializable data object URL : TypeInfo
     }
 
@@ -52,6 +56,7 @@ data class Task(
         val downloadState: DownloadState,
         val videoInfo: VideoInfo?,
         val viewState: ViewState,
+        val directHttpFile: DirectHttpFile? = null,
     )
 
     @Serializable

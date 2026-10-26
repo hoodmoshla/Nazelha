@@ -5,6 +5,9 @@ import androidx.lifecycle.viewModelScope
 import com.snapnet.database.objects.CommandTemplate
 import com.snapnet.download.DownloaderV2
 import com.snapnet.download.Task
+import com.snapnet.download.TaskFactory
+import com.snapnet.download.http.DirectHttpFile
+import com.snapnet.download.http.DirectHttpLinkResolver
 import com.snapnet.util.DownloadUtil
 import com.snapnet.util.NotificationUtil
 import com.snapnet.util.PlaylistResult
@@ -23,6 +26,8 @@ private const val TAG = "DownloadDialogViewModel"
 
 class DownloadDialogViewModel(private val downloader: DownloaderV2) : ViewModel() {
 
+    private val directHttpResolver = DirectHttpLinkResolver()
+
     sealed interface SelectionState {
         data object Idle : SelectionState
 
@@ -38,6 +43,8 @@ class DownloadDialogViewModel(private val downloader: DownloaderV2) : ViewModel(
         data class Configure(val urlList: List<String>) : SheetState
 
         data class Loading(val taskKey: String, val job: Job) : SheetState
+
+        data class DirectHttpPreview(val url: String, val file: DirectHttpFile) : SheetState
 
         data class Error(val action: Action, val throwable: Throwable) : SheetState
     }
@@ -81,6 +88,12 @@ class DownloadDialogViewModel(private val downloader: DownloaderV2) : ViewModel(
         ) : Action
 
         data object Cancel : Action
+
+        data class EnqueueDirectHttpFile(
+            val url: String,
+            val file: DirectHttpFile,
+            val preferences: DownloadUtil.DownloadPreferences,
+        ) : Action
     }
 
     private val mSelectionStateFlow: MutableStateFlow<SelectionState> =
@@ -102,6 +115,7 @@ class DownloadDialogViewModel(private val downloader: DownloaderV2) : ViewModel(
                 is Action.ProceedWithURLs -> proceedWithUrls(this)
                 is Action.FetchFormats -> fetchFormat(this)
                 is Action.FetchPlaylist -> fetchPlaylist(this)
+                is Action.EnqueueDirectHttpFile -> enqueueDirectHttpFile(this)
                 is Action.DownloadWithPreset -> downloadWithPreset(urlList, preferences)
                 is Action.RunCommand -> runCommand(url, template, preferences)
                 Action.HideSheet -> hideDialog()
@@ -113,14 +127,21 @@ class DownloadDialogViewModel(private val downloader: DownloaderV2) : ViewModel(
     }
 
     private fun proceedWithUrls(action: Action.ProceedWithURLs) {
-        mSheetStateFlow.update { SheetState.Configure(action.urlList) }
+        if (action.urlList.size != 1) {
+            mSheetStateFlow.update { SheetState.Configure(action.urlList) }
+            return
+        }
+        val url = action.urlList.first()
+        resolveDirectFile(url) {
+            mSheetStateFlow.update { SheetState.Configure(action.urlList) }
+        }
     }
 
     private fun fetchPlaylist(action: Action.FetchPlaylist) {
         val (url, preferences) = action
         mSelectionStateFlow.update { SelectionState.Idle }
         if (action.isSharedIntent) {
-            fetchSharedFormats(action)
+            resolveDirectFile(url) { fetchSharedFormats(action) }
             return
         }
         val job =
@@ -187,6 +208,29 @@ class DownloadDialogViewModel(private val downloader: DownloaderV2) : ViewModel(
         job.start()
     }
 
+    private fun resolveDirectFile(url: String, onNotDirectFile: () -> Unit) {
+        val taskKey = "DirectHttpPreview_${java.util.UUID.randomUUID()}"
+        val job =
+            viewModelScope.launch(Dispatchers.IO, start = CoroutineStart.LAZY) {
+                val file = runCatching { directHttpResolver.resolve(url, taskKey) }.getOrNull()
+                withContext(Dispatchers.Main) {
+                    val loading = sheetState as? SheetState.Loading
+                    if (loading?.taskKey != taskKey) return@withContext
+                    if (file == null) {
+                        onNotDirectFile()
+                    } else {
+                        mSheetStateFlow.update { SheetState.DirectHttpPreview(url = url, file = file) }
+                    }
+                }
+            }
+        mSheetStateFlow.update { SheetState.Loading(taskKey = taskKey, job = job) }
+        mSheetValueFlow.update { SheetValue.Expanded }
+        job.invokeOnCompletion { cause ->
+            if (cause is kotlinx.coroutines.CancellationException) directHttpResolver.cancel(taskKey)
+        }
+        job.start()
+    }
+
     private fun fetchFormat(action: Action.FetchFormats) {
         val (url, audioOnly, preferences) = action
 
@@ -220,6 +264,17 @@ class DownloadDialogViewModel(private val downloader: DownloaderV2) : ViewModel(
         preferences: DownloadUtil.DownloadPreferences,
     ) {
         urlList.forEach { downloader.enqueue(Task(url = it, preferences = preferences)) }
+        hideDialog()
+    }
+
+    private fun enqueueDirectHttpFile(action: Action.EnqueueDirectHttpFile) {
+        downloader.enqueue(
+            TaskFactory.createDirectHttpFile(
+                url = action.url,
+                file = action.file,
+                preferences = action.preferences,
+            )
+        )
         hideDialog()
     }
 
@@ -263,7 +318,11 @@ class DownloadDialogViewModel(private val downloader: DownloaderV2) : ViewModel(
             is SheetState.Loading -> {
                 // Closing the preview must stop the fetch itself. Previously the process survived
                 // whenever yt-dlp rejected the cancel, leaving the progress notification running.
-                val res = YoutubeDL.destroyProcessById(id = state.taskKey)
+                val res =
+                    if (state.taskKey.startsWith("DirectHttpPreview_")) {
+                        directHttpResolver.cancel(state.taskKey)
+                        true
+                    } else YoutubeDL.destroyProcessById(id = state.taskKey)
                 state.job.cancel()
                 NotificationUtil.cancelNotification(state.taskKey.hashCode())
                 NotificationUtil.cancelNotification(NotificationUtil.SERVICE_NOTIFICATION_ID)

@@ -117,6 +117,7 @@ import com.snapnet.ui.page.downloadv2.configure.ActionButton.StartTask
 import com.snapnet.ui.page.downloadv2.configure.DownloadDialogViewModel.Action
 import com.snapnet.ui.page.downloadv2.configure.DownloadDialogViewModel.SelectionState
 import com.snapnet.ui.page.downloadv2.configure.DownloadDialogViewModel.SheetState.Configure
+import com.snapnet.ui.page.downloadv2.configure.DownloadDialogViewModel.SheetState.DirectHttpPreview
 import com.snapnet.ui.page.downloadv2.configure.DownloadDialogViewModel.SheetState.Error
 import com.snapnet.ui.page.downloadv2.configure.DownloadDialogViewModel.SheetState.InputUrl
 import com.snapnet.ui.page.downloadv2.configure.DownloadDialogViewModel.SheetState.Loading
@@ -152,6 +153,7 @@ import com.snapnet.util.ToastUtil
 import com.snapnet.util.USE_CUSTOM_AUDIO_PRESET
 import com.snapnet.util.VIDEO_FORMAT
 import com.snapnet.util.VIDEO_QUALITY
+import com.snapnet.util.toFileSizeText
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -410,6 +412,14 @@ private fun DownloadDialogContent(
                 ErrorPage(state = state, onActionPost = onActionPost)
             }
 
+            is DirectHttpPreview -> {
+                DirectHttpFilePreviewPage(
+                    state = state,
+                    preferences = preferences,
+                    onActionPost = onActionPost,
+                )
+            }
+
             is Loading -> {
                 Column(modifier = Modifier.fillMaxWidth().padding(vertical = 120.dp)) {
                     CircularProgressIndicator(
@@ -424,6 +434,58 @@ private fun DownloadDialogContent(
                     onConfigUpdate = { Config.updatePreferences(newValue = it, oldValue = config) },
                     onActionPost = onActionPost,
                 )
+            }
+        }
+    }
+}
+
+@Composable
+private fun DirectHttpFilePreviewPage(
+    state: DirectHttpPreview,
+    preferences: DownloadUtil.DownloadPreferences,
+    onActionPost: (Action) -> Unit,
+) {
+    Column(
+        modifier =
+            Modifier.fillMaxWidth()
+                .verticalScroll(rememberScrollState())
+                .padding(24.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
+    ) {
+        Text(
+            text = stringResource(R.string.direct_file_preview),
+            style = MaterialTheme.typography.titleLarge,
+        )
+        Text(
+            text = stringResource(R.string.direct_file_name, state.file.fileName),
+            style = MaterialTheme.typography.bodyLarge,
+            maxLines = 3,
+            overflow = TextOverflow.Ellipsis,
+        )
+        Text(
+            text = stringResource(R.string.direct_file_type, state.file.contentType),
+            style = MaterialTheme.typography.bodyMedium,
+        )
+        val size =
+            state.file.sizeBytes?.toFileSizeText()
+                ?: stringResource(R.string.direct_file_size_unknown)
+        Text(text = stringResource(R.string.direct_file_size, size), style = MaterialTheme.typography.bodyMedium)
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Button(
+                onClick = {
+                    onActionPost(
+                        Action.EnqueueDirectHttpFile(
+                            url = state.url,
+                            file = state.file,
+                            preferences = preferences,
+                        )
+                    )
+                }
+            ) {
+                Text(stringResource(R.string.download))
+            }
+            FilledTonalButton(onClick = { onActionPost(Action.HideSheet) }) {
+                Text(stringResource(R.string.cancel))
             }
         }
     }

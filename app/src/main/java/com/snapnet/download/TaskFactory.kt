@@ -3,6 +3,7 @@ package com.snapnet.download
 import androidx.annotation.CheckResult
 import com.snapnet.download.Task.DownloadState.Idle
 import com.snapnet.download.Task.DownloadState.ReadyWithInfo
+import com.snapnet.download.http.DirectHttpFile
 import com.snapnet.util.DownloadUtil.DownloadPreferences
 import com.snapnet.util.Format
 import com.snapnet.util.PlaylistResult
@@ -12,6 +13,34 @@ import kotlin.math.roundToInt
 import com.snapnet.util.resolvedFileSizeBytes
 
 object TaskFactory {
+    /** Creates a queue entry for a direct file after the link preview has been accepted. */
+    @CheckResult
+    fun createDirectHttpFile(
+        url: String,
+        file: DirectHttpFile,
+        preferences: DownloadPreferences,
+    ): TaskWithState {
+        val task = Task(url = url, type = Task.TypeInfo.DirectHttpFile, preferences = preferences)
+        val viewState =
+            Task.ViewState(
+                url = url,
+                title = file.fileName,
+                uploader = file.contentType,
+                extractorKey = "HTTP",
+                fileSizeApprox = file.sizeBytes?.toDouble() ?: .0,
+            )
+        return TaskWithState(
+            task = task,
+            state =
+                Task.State(
+                    downloadState = ReadyWithInfo,
+                    videoInfo = null,
+                    viewState = viewState,
+                    directHttpFile = file,
+                ),
+        )
+    }
+
     /**
      * @return A [TaskWithState] with extra configurations made by user in the custom format
      *   selection page
