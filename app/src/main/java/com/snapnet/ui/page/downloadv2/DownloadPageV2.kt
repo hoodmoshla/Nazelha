@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.calculateEndPadding
 import androidx.compose.foundation.layout.calculateStartPadding
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -23,7 +24,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -156,42 +156,28 @@ internal fun redactDownloadErrorDetails(text: String): String =
 
 enum class Filter {
     All,
-    Downloading,
-    Canceled,
-    Finished;
+    Active,
+    Completed,
+    Stopped;
 
     @Composable
     @ReadOnlyComposable
     fun label(): String =
         when (this) {
             All -> stringResource(R.string.all)
-            Downloading -> stringResource(R.string.status_downloading)
-            Canceled -> stringResource(R.string.status_canceled)
-            Finished -> stringResource(R.string.status_completed)
+            Active -> stringResource(R.string.download_filter_active)
+            Completed -> stringResource(R.string.status_completed)
+            Stopped -> stringResource(R.string.download_filter_stopped)
         }
 
     fun predict(entry: Pair<Task, Task.State>): Boolean {
         if (this == All) return true
         val state = entry.second.downloadState
         return when (this) {
-            Downloading -> {
-                when (state) {
-                    is FetchingInfo,
-                    Idle,
-                    ReadyWithInfo,
-                    is Running -> true
-                    else -> false
-                }
-            }
-            Canceled -> {
-                state is Error || state is Task.DownloadState.Canceled
-            }
-            Finished -> {
-                state is Completed
-            }
-            else -> {
-                true
-            }
+            Active -> state is FetchingInfo || state == Idle || state == ReadyWithInfo || state is Running
+            Completed -> state is Task.DownloadState.Completed
+            Stopped -> state is Error || state is Task.DownloadState.Canceled
+            All -> true
         }
     }
 }
@@ -222,7 +208,6 @@ sealed interface UiAction {
 @Composable
 fun DownloadPageV2(
     modifier: Modifier = Modifier,
-    onMenuOpen: (() -> Unit) = {},
     dialogViewModel: DownloadDialogViewModel,
     downloader: DownloaderV2 = koinInject(),
 ) {
@@ -239,7 +224,6 @@ fun DownloadPageV2(
             view.slightHapticFeedback()
             dialogViewModel.postAction(Action.ShowSheet())
         },
-        onMenuOpen = onMenuOpen,
     ) { task, action ->
         view.slightHapticFeedback()
         when (action) {
@@ -347,7 +331,6 @@ fun DownloadPageImplV2(
     modifier: Modifier = Modifier,
     taskDownloadStateMap: SnapshotStateMap<Task, Task.State>,
     downloadCallback: () -> Unit = {},
-    onMenuOpen: (() -> Unit) = {},
     onActionPost: (Task, UiAction) -> Unit,
 ) {
     var activeFilter by remember { mutableStateOf(Filter.All) }
@@ -356,8 +339,6 @@ fun DownloadPageImplV2(
             derivedStateOf { taskDownloadStateMap.filter { activeFilter.predict(it.toPair()) } }
         }
     val scope = rememberCoroutineScope()
-    val context = LocalContext.current
-
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = false)
     var selectedTask by remember { mutableStateOf<Task?>(null) }
     val view = LocalView.current
@@ -378,7 +359,8 @@ fun DownloadPageImplV2(
     }
 
     Scaffold(
-        modifier = modifier.fillMaxSize().statusBarsPadding(),
+        modifier = modifier.fillMaxSize(),
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         containerColor = MaterialTheme.colorScheme.surface,
         floatingActionButton = { FABs(modifier = Modifier, downloadCallback = downloadCallback) },
     ) { windowInsetsPadding ->
@@ -412,7 +394,7 @@ fun DownloadPageImplV2(
             CompositionLocalProvider(LocalOverscrollFactory provides null) {
                 Column(modifier = Modifier.fillMaxWidth()) {
                     Spacer(Modifier.height(with(LocalDensity.current) { headerOffset.toDp() }))
-                    Header(onMenuOpen = onMenuOpen, modifier = Modifier.padding(horizontal = 16.dp))
+                    Header(modifier = Modifier.padding(horizontal = 16.dp))
                     SelectionGroupRow(
                         modifier =
                             Modifier.horizontalScroll(rememberScrollState())
@@ -475,7 +457,6 @@ fun DownloadPageImplV2(
                                 audioCount = filteredMap.size - videoCount,
                                 isGridView = isGridView,
                                 onToggleView = { isGridView = !isGridView },
-                                onShowMenu = { context.makeToast("Not implemented yet!") },
                             )
                         }
                     }
@@ -564,30 +545,21 @@ fun DownloadPageImplV2(
 }
 
 @Composable
-fun Header(modifier: Modifier = Modifier, onMenuOpen: () -> Unit = {}) {
+fun Header(modifier: Modifier = Modifier) {
     val windowWidthSizeClass = LocalWindowWidthState.current
     when (windowWidthSizeClass) {
         WindowWidthSizeClass.Expanded -> {
             HeaderExpanded(modifier = modifier)
         }
         else -> {
-            HeaderCompact(modifier = modifier, onMenuOpen = onMenuOpen)
+            HeaderCompact(modifier = modifier)
         }
     }
 }
 
 @Composable
-private fun HeaderCompact(modifier: Modifier = Modifier, onMenuOpen: () -> Unit) {
-
+private fun HeaderCompact(modifier: Modifier = Modifier) {
     Row(modifier = modifier.height(64.dp), verticalAlignment = Alignment.CenterVertically) {
-        IconButton(onClick = onMenuOpen, modifier = Modifier) {
-            Icon(
-                imageVector = Icons.Outlined.Menu,
-                contentDescription = stringResource(R.string.show_navigation_drawer),
-                modifier = Modifier,
-            )
-        }
-        Spacer(modifier = Modifier.width(4.dp))
         Text(
             stringResource(R.string.download_queue),
             style =
@@ -697,7 +669,6 @@ fun SubHeader(
     audioCount: Int = 0,
     isGridView: Boolean = true,
     onToggleView: () -> Unit,
-    onShowMenu: () -> Unit,
 ) {
     val text = buildString {
         if (videoCount > 0) {
@@ -738,19 +709,6 @@ fun SubHeader(
             )
         }
 
-        Spacer(Modifier.width(4.dp))
-
-        FilledIconButton(
-            onClick = onShowMenu,
-            modifier = Modifier.clearAndSetSemantics {}.size(32.dp),
-            colors = IconButtonDefaults.filledIconButtonColors(containerColor = containerColor),
-        ) {
-            Icon(
-                imageVector = Icons.Outlined.MoreVert,
-                contentDescription = null,
-                modifier = Modifier.size(16.dp),
-            )
-        }
     }
 }
 
@@ -840,7 +798,6 @@ internal class DownloadPageV2Test {
                 DownloadPageImplV2(
                     taskDownloadStateMap = downloader.getTaskStateMap(),
                     onActionPost = { task, state -> },
-                    onMenuOpen = {},
                 )
             }
         }

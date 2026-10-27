@@ -19,6 +19,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Predictive back animation support for Android 14+
 - Bump up minimum API level to 24 (Android 7.0)
 
+## [v1.0.7] - preview (2026-10-27)
+
+### Added
+
+- Replace the navigation drawer with an RTL-aware five-destination bottom bar and a link-focused home dashboard.
+- Add an in-app browser, a downloads summary and filters, file grid/list views, and multi-file selection and sharing.
+- Add unit and emulator UI coverage for navigation ordering, selection state, download filters, dashboard counts, and file selection.
+
+### Changed
+
+- Refresh the Arabic-first color system with navy and teal light/dark palettes.
+- Enable R8 and resource shrinking for the Debug-signed preview while retaining the current media engines and application ID.
+- Extend GitHub Actions to run API 35 instrumentation tests and publish a prerelease only after validation succeeds.
+
+### Installation note
+
+- This preview uses a new Debug signing certificate and cannot update an installation of v1.0.6. Back up any app-internal data before uninstalling the older preview.
+
 ## [v1.13.0][1.13.0] - 2024-08-18
 
 ### Fixed

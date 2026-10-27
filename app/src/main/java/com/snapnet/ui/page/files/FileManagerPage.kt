@@ -1,6 +1,7 @@
 package com.snapnet.ui.page.files
 
 import android.Manifest
+import android.content.ClipData
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -13,6 +14,8 @@ import android.webkit.MimeTypeMap
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -22,6 +25,10 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
@@ -29,15 +36,20 @@ import androidx.compose.material.icons.automirrored.outlined.OpenInNew
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.FolderOpen
+import androidx.compose.material.icons.outlined.GridView
+import androidx.compose.material.icons.automirrored.outlined.List
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.IconToggleButton
 import androidx.compose.material3.LargeTopAppBar
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -53,6 +65,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -60,6 +73,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -128,6 +143,8 @@ private data class FileManagerSnapshot(
 fun FileManagerPage(
     onNavigateBack: () -> Unit,
     onOpenDirectorySettings: () -> Unit,
+    showTopBar: Boolean = true,
+    modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -143,9 +160,11 @@ fun FileManagerPage(
     var searchText by remember { mutableStateOf("") }
     var selectedFilter by remember { mutableStateOf(FileListFilter.ALL) }
     var selectedSort by remember { mutableStateOf(FileListSort.NEWEST) }
+    var isGridView by rememberSaveable { mutableStateOf(false) }
+    var selectedFileKeys by remember { mutableStateOf<Set<String>>(emptySet()) }
     var renameTarget by remember { mutableStateOf<ManagedDownloadFile?>(null) }
     var renameText by remember { mutableStateOf("") }
-    var deleteTarget by remember { mutableStateOf<ManagedDownloadFile?>(null) }
+    var deleteTargets by remember { mutableStateOf<List<ManagedDownloadFile>?>(null) }
 
     fun refreshFiles() {
         scanJob?.cancel()
@@ -156,6 +175,7 @@ fun FileManagerPage(
                 val snapshot = withContext(Dispatchers.IO) { scanDownloadFiles(context) }
                 if (generation == scanGeneration) {
                     files = snapshot.files
+                    selectedFileKeys = selectedFileKeys intersect snapshot.files.mapTo(mutableSetOf()) { it.key }
                     needsStorageAccess = snapshot.needsStorageAccess
                     freeSpaceBytes = snapshot.freeSpaceBytes
                     scanTruncated = snapshot.truncated
@@ -209,155 +229,155 @@ fun FileManagerPage(
         }
     }
 
+    val selectedFiles = files.filter { it.key in selectedFileKeys }
+
+    fun toggleSelection(item: ManagedDownloadFile) {
+        selectedFileKeys = toggleFileSelection(selectedFileKeys, item.key)
+    }
+
+    fun openManagedFile(item: ManagedDownloadFile) {
+        runCatching {
+            val intent = FileUtil.createIntentForOpeningFile(item.path)
+                ?: error(context.getString(R.string.file_open_error))
+            context.startActivity(intent)
+        }.onFailure {
+            scope.launch { snackbarHostState.showSnackbar(context.getString(R.string.file_open_error)) }
+        }
+    }
+
+    fun shareManagedFiles(items: List<ManagedDownloadFile>) {
+        runCatching {
+            val uris = items.mapNotNull { item ->
+                FileUtil.createIntentForSharingFile(item.path)?.data
+            }
+            if (uris.isEmpty()) error(context.getString(R.string.file_open_error))
+            val intent =
+                if (uris.size == 1) {
+                    FileUtil.createIntentForSharingFile(items.first().path)
+                        ?: error(context.getString(R.string.file_open_error))
+                } else {
+                    val mimeTypes = uris.mapNotNull { context.contentResolver.getType(it) }.distinct()
+                    val clip = ClipData.newUri(context.contentResolver, context.getString(R.string.file_action_share), uris.first())
+                    uris.drop(1).forEach { clip.addItem(ClipData.Item(it)) }
+                    Intent(Intent.ACTION_SEND_MULTIPLE).apply {
+                        type = mimeTypes.singleOrNull() ?: "*/*"
+                        putParcelableArrayListExtra(Intent.EXTRA_STREAM, ArrayList(uris))
+                        clipData = clip
+                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    }
+                }
+            context.startActivity(Intent.createChooser(intent, context.getString(R.string.file_action_share)))
+        }.onFailure {
+            scope.launch { snackbarHostState.showSnackbar(context.getString(R.string.file_open_error)) }
+        }
+    }
+
     Scaffold(
+        modifier = modifier.fillMaxSize(),
+        contentWindowInsets = androidx.compose.foundation.layout.WindowInsets(0, 0, 0, 0),
         topBar = {
-            LargeTopAppBar(
-                title = { Text(stringResource(R.string.file_manager)) },
-                navigationIcon = { BackButton(onNavigateBack) },
-                actions = {
-                    IconButton(onClick = onOpenDirectorySettings) {
-                        Icon(Icons.Outlined.FolderOpen, contentDescription = stringResource(R.string.download_directory))
-                    }
-                    IconButton(onClick = { refreshFiles() }, enabled = !isLoading) {
-                        Icon(Icons.Outlined.Refresh, contentDescription = stringResource(R.string.refresh))
-                    }
-                },
-                scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior(),
-            )
+            if (showTopBar) {
+                LargeTopAppBar(
+                    title = { Text(stringResource(R.string.file_manager)) },
+                    navigationIcon = { BackButton(onNavigateBack) },
+                    actions = {
+                        IconButton(onClick = onOpenDirectorySettings) {
+                            Icon(Icons.Outlined.FolderOpen, contentDescription = stringResource(R.string.download_directory))
+                        }
+                        IconButton(onClick = { refreshFiles() }, enabled = !isLoading) {
+                            Icon(Icons.Outlined.Refresh, contentDescription = stringResource(R.string.refresh))
+                        }
+                    },
+                    scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior(),
+                )
+            }
         },
         snackbarHost = { SnackbarHost(snackbarHostState) },
     ) { padding ->
-        LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = padding,
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            item {
-                Column(modifier = Modifier.padding(horizontal = 16.dp)) {
-                    if (freeSpaceBytes != null) {
-                        Text(
-                            text = stringResource(R.string.file_manager_free_space, formatFileSize(freeSpaceBytes!!)),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
+        val contentModifier = Modifier.fillMaxSize().padding(padding)
+        val header: @Composable () -> Unit = {
+            FileManagerHeader(
+                freeSpaceBytes = freeSpaceBytes,
+                searchText = searchText,
+                onSearchTextChange = { searchText = it },
+                selectedFilter = selectedFilter,
+                onFilterSelected = { selectedFilter = it },
+                selectedSort = selectedSort,
+                onSortSelected = { selectedSort = it },
+                isGridView = isGridView,
+                onToggleView = { isGridView = !isGridView },
+                onOpenDirectorySettings = onOpenDirectorySettings,
+                onRefresh = { refreshFiles() },
+                isLoading = isLoading,
+                scanTruncated = scanTruncated,
+                needsStorageAccess = needsStorageAccess,
+                onRequestStorageAccess = {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) openAllFilesAccessSettings(context)
+                    else legacyPermissionLauncher.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE)
+                },
+                empty = !isLoading && visibleFiles.isEmpty(),
+                selectedCount = selectedFiles.size,
+                allVisibleSelected = visibleFiles.isNotEmpty() && visibleFiles.all { it.key in selectedFileKeys },
+                onSelectAllVisible = {
+                    selectedFileKeys = selectVisibleFiles(selectedFileKeys, visibleFiles.mapTo(mutableSetOf()) { it.key }, selected = true)
+                },
+                onClearSelection = { selectedFileKeys = emptySet() },
+                onOpenSelected = { selectedFiles.singleOrNull()?.let(::openManagedFile) },
+                onShareSelected = { shareManagedFiles(selectedFiles) },
+                onRenameSelected = {
+                    selectedFiles.singleOrNull()?.let { target ->
+                        renameTarget = target
+                        renameText = target.name
                     }
-                    OutlinedTextField(
-                        modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
-                        value = searchText,
-                        onValueChange = { searchText = it },
-                        label = { Text(stringResource(R.string.search)) },
-                        singleLine = true,
-                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                },
+                onDeleteSelected = { if (selectedFiles.isNotEmpty()) deleteTargets = selectedFiles },
+            )
+        }
+        if (isGridView) {
+            LazyVerticalGrid(
+                columns = GridCells.Adaptive(minSize = 176.dp),
+                modifier = contentModifier,
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                item(span = { GridItemSpan(maxLineSpan) }) { header() }
+                items(visibleFiles, key = { it.key }) { item ->
+                    ManagedFileCard(
+                        modifier = Modifier,
+                        item = item,
+                        selected = item.key in selectedFileKeys,
+                        selectionMode = selectedFileKeys.isNotEmpty(),
+                        compact = true,
+                        onToggleSelection = { toggleSelection(item) },
+                        onOpen = { if (selectedFileKeys.isNotEmpty()) toggleSelection(item) else openManagedFile(item) },
+                        onShare = { shareManagedFiles(listOf(item)) },
+                        onRename = { renameTarget = item; renameText = item.name },
+                        onDelete = { deleteTargets = listOf(item) },
                     )
                 }
             }
-            item {
-                Row(
-                    modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 8.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    FileListFilter.values().forEach { filter ->
-                        FilterChip(
-                            selected = selectedFilter == filter,
-                            onClick = { selectedFilter = filter },
-                            label = { Text(stringResource(filter.labelResource())) },
-                        )
-                    }
-                }
-            }
-            item {
-                Row(
-                    modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 8.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    FileListSort.values().forEach { sort ->
-                        FilterChip(
-                            selected = selectedSort == sort,
-                            onClick = { selectedSort = sort },
-                            label = { Text(stringResource(sort.labelResource())) },
-                        )
-                    }
-                }
-            }
-            if (scanTruncated) {
-                item {
-                    Text(
-                        pluralStringResource(
-                            R.plurals.file_manager_scan_limited,
-                            MAX_SCANNED_FILES,
-                            MAX_SCANNED_FILES,
-                        ),
-                        modifier = Modifier.padding(horizontal = 16.dp),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        } else {
+            LazyColumn(
+                modifier = contentModifier,
+                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                item { header() }
+                items(visibleFiles, key = { it.key }) { item ->
+                    ManagedFileCard(
+                        modifier = Modifier,
+                        item = item,
+                        selected = item.key in selectedFileKeys,
+                        selectionMode = selectedFileKeys.isNotEmpty(),
+                        compact = false,
+                        onToggleSelection = { toggleSelection(item) },
+                        onOpen = { if (selectedFileKeys.isNotEmpty()) toggleSelection(item) else openManagedFile(item) },
+                        onShare = { shareManagedFiles(listOf(item)) },
+                        onRename = { renameTarget = item; renameText = item.name },
+                        onDelete = { deleteTargets = listOf(item) },
                     )
                 }
-            }
-            if (needsStorageAccess) {
-                item {
-                    Card(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
-                        Column(modifier = Modifier.padding(16.dp)) {
-                            Text(stringResource(R.string.file_manager_permission_needed), style = MaterialTheme.typography.titleMedium)
-                            Text(
-                                stringResource(R.string.file_manager_permission_desc),
-                                modifier = Modifier.padding(top = 4.dp),
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                            TextButton(onClick = {
-                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                                    openAllFilesAccessSettings(context)
-                                } else {
-                                    legacyPermissionLauncher.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE)
-                                }
-                            }) {
-                                Text(stringResource(R.string.file_manager_permission_button))
-                            }
-                        }
-                    }
-                }
-            }
-            if (isLoading) {
-                item {
-                    Box(modifier = Modifier.fillMaxWidth().padding(24.dp)) {
-                        CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
-                    }
-                }
-            }
-            if (!isLoading && visibleFiles.isEmpty()) {
-                item {
-                    Text(
-                        text = stringResource(R.string.file_manager_empty),
-                        modifier = Modifier.fillMaxWidth().padding(24.dp),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            }
-            items(visibleFiles, key = { it.key }) { item ->
-                ManagedFileCard(
-                    item = item,
-                    onOpen = {
-                        runCatching {
-                            val intent = FileUtil.createIntentForOpeningFile(item.path)
-                                ?: error(context.getString(R.string.file_open_error))
-                            context.startActivity(intent)
-                        }.onFailure {
-                            scope.launch { snackbarHostState.showSnackbar(context.getString(R.string.file_open_error)) }
-                        }
-                    },
-                    onShare = {
-                        runCatching {
-                            val intent = FileUtil.createIntentForSharingFile(item.path)
-                                ?: error(context.getString(R.string.file_open_error))
-                            context.startActivity(Intent.createChooser(intent, item.name))
-                        }.onFailure {
-                            scope.launch { snackbarHostState.showSnackbar(context.getString(R.string.file_open_error)) }
-                        }
-                    },
-                    onRename = {
-                        renameTarget = item
-                        renameText = item.name
-                    },
-                    onDelete = { deleteTarget = item },
-                )
             }
         }
     }
@@ -412,51 +432,246 @@ fun FileManagerPage(
         )
     }
 
-    deleteTarget?.let { target ->
+    deleteTargets?.let { targets ->
         AlertDialog(
-            onDismissRequest = { deleteTarget = null },
+            onDismissRequest = { deleteTargets = null },
             title = { Text(stringResource(R.string.file_delete_title)) },
             text = {
                 Column {
-                    Text(stringResource(R.string.file_delete_confirmation, target.name))
-                    Text(stringResource(R.string.file_manager_location, target.location), modifier = Modifier.padding(top = 8.dp))
+                    if (targets.size == 1) {
+                        Text(stringResource(R.string.file_delete_confirmation, targets.single().name))
+                        Text(
+                            stringResource(R.string.file_manager_location, targets.single().location),
+                            modifier = Modifier.padding(top = 8.dp),
+                        )
+                    } else {
+                        Text(stringResource(R.string.file_delete_multiple_confirmation, targets.size))
+                    }
                 }
             },
             confirmButton = {
                 TextButton(
                     onClick = {
                         scope.launch {
-                            val deleted =
+                            val results =
                                 withContext(Dispatchers.IO) {
-                                    runCatching {
-                                        target.file?.delete() ?: (target.document?.delete() == true)
-                                    }.getOrDefault(false)
+                                    targets.map { target ->
+                                        target.key to runCatching {
+                                            target.file?.delete() ?: (target.document?.delete() == true)
+                                        }.getOrDefault(false)
+                                    }
                                 }
-                            deleteTarget = null
-                            if (deleted) refreshFiles()
-                            else snackbarHostState.showSnackbar(context.getString(R.string.file_operation_error))
+                            deleteTargets = null
+                            selectedFileKeys = selectedFileKeys - results.filter { it.second }.map { it.first }.toSet()
+                            if (results.any { it.second }) refreshFiles()
+                            if (results.any { !it.second }) {
+                                snackbarHostState.showSnackbar(context.getString(R.string.file_operation_error))
+                            }
                         }
                     },
                 ) { Text(stringResource(R.string.delete)) }
             },
             dismissButton = {
-                TextButton(onClick = { deleteTarget = null }) { Text(stringResource(R.string.cancel)) }
+                TextButton(onClick = { deleteTargets = null }) { Text(stringResource(R.string.cancel)) }
             },
         )
     }
 }
 
 @Composable
+private fun FileManagerHeader(
+    freeSpaceBytes: Long?,
+    searchText: String,
+    onSearchTextChange: (String) -> Unit,
+    selectedFilter: FileListFilter,
+    onFilterSelected: (FileListFilter) -> Unit,
+    selectedSort: FileListSort,
+    onSortSelected: (FileListSort) -> Unit,
+    isGridView: Boolean,
+    onToggleView: () -> Unit,
+    onOpenDirectorySettings: () -> Unit,
+    onRefresh: () -> Unit,
+    isLoading: Boolean,
+    scanTruncated: Boolean,
+    needsStorageAccess: Boolean,
+    onRequestStorageAccess: () -> Unit,
+    empty: Boolean,
+    selectedCount: Int,
+    allVisibleSelected: Boolean,
+    onSelectAllVisible: () -> Unit,
+    onClearSelection: () -> Unit,
+    onOpenSelected: () -> Unit,
+    onShareSelected: () -> Unit,
+    onRenameSelected: () -> Unit,
+    onDeleteSelected: () -> Unit,
+) {
+    Column(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 4.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(stringResource(R.string.file_manager), modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleLarge)
+            IconButton(onClick = onOpenDirectorySettings) {
+                Icon(Icons.Outlined.FolderOpen, contentDescription = stringResource(R.string.download_directory))
+            }
+            IconButton(onClick = onRefresh, enabled = !isLoading) {
+                Icon(Icons.Outlined.Refresh, contentDescription = stringResource(R.string.refresh))
+            }
+            IconToggleButton(checked = isGridView, onCheckedChange = { onToggleView() }) {
+                Icon(
+                    imageVector = if (isGridView) Icons.AutoMirrored.Outlined.List else Icons.Outlined.GridView,
+                    contentDescription = stringResource(if (isGridView) R.string.file_list_view else R.string.file_grid_view),
+                )
+            }
+        }
+        if (freeSpaceBytes != null) {
+            Text(
+                text = stringResource(R.string.file_manager_free_space, formatFileSize(freeSpaceBytes)),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        OutlinedTextField(
+            modifier = Modifier.fillMaxWidth(),
+            value = searchText,
+            onValueChange = onSearchTextChange,
+            label = { Text(stringResource(R.string.search)) },
+            singleLine = true,
+            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+        )
+        Row(
+            modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            FileListFilter.values().forEach { filter ->
+                FilterChip(
+                    selected = selectedFilter == filter,
+                    onClick = { onFilterSelected(filter) },
+                    label = { Text(stringResource(filter.labelResource())) },
+                )
+            }
+        }
+        Row(
+            modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            FileListSort.values().forEach { sort ->
+                FilterChip(
+                    selected = selectedSort == sort,
+                    onClick = { onSortSelected(sort) },
+                    label = { Text(stringResource(sort.labelResource())) },
+                )
+            }
+        }
+        if (selectedCount > 0) {
+            Row(
+                modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                Text(stringResource(R.string.file_selected_count, selectedCount), style = MaterialTheme.typography.labelLarge)
+                TextButton(onClick = if (allVisibleSelected) onClearSelection else onSelectAllVisible) {
+                    Text(stringResource(if (allVisibleSelected) R.string.file_clear_selection else R.string.file_select_all))
+                }
+                if (selectedCount == 1) {
+                    IconButton(onClick = onOpenSelected) {
+                        Icon(Icons.AutoMirrored.Outlined.OpenInNew, contentDescription = stringResource(R.string.file_action_open))
+                    }
+                    IconButton(onClick = onRenameSelected) {
+                        Icon(Icons.Outlined.Edit, contentDescription = stringResource(R.string.file_action_rename))
+                    }
+                }
+                IconButton(onClick = onShareSelected) {
+                    Icon(Icons.Outlined.Share, contentDescription = stringResource(R.string.file_share_selected))
+                }
+                IconButton(onClick = onDeleteSelected) {
+                    Icon(Icons.Outlined.Delete, contentDescription = stringResource(R.string.file_delete_selected))
+                }
+            }
+            if (selectedCount > 1) {
+                Text(
+                    stringResource(R.string.file_selected_rename_hint),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+        }
+        if (scanTruncated) {
+            Text(
+                pluralStringResource(R.plurals.file_manager_scan_limited, MAX_SCANNED_FILES, MAX_SCANNED_FILES),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.bodySmall,
+            )
+        }
+        if (needsStorageAccess) {
+            Card(modifier = Modifier.fillMaxWidth()) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text(stringResource(R.string.file_manager_permission_needed), style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        stringResource(R.string.file_manager_permission_desc),
+                        modifier = Modifier.padding(top = 4.dp),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    TextButton(onClick = onRequestStorageAccess) {
+                        Text(stringResource(R.string.file_manager_permission_button))
+                    }
+                }
+            }
+        }
+        if (isLoading) {
+            Box(modifier = Modifier.fillMaxWidth().padding(20.dp)) {
+                CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
+            }
+        }
+        if (empty) {
+            Text(
+                stringResource(R.string.file_manager_empty),
+                modifier = Modifier.fillMaxWidth().padding(vertical = 18.dp),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+@Composable
 private fun ManagedFileCard(
+    modifier: Modifier,
     item: ManagedDownloadFile,
+    selected: Boolean,
+    selectionMode: Boolean,
+    compact: Boolean,
+    onToggleSelection: () -> Unit,
     onOpen: () -> Unit,
     onShare: () -> Unit,
     onRename: () -> Unit,
     onDelete: () -> Unit,
 ) {
-    Card(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
+    Card(
+        modifier =
+            modifier.fillMaxWidth().combinedClickable(
+                onClick = onOpen,
+                onLongClick = onToggleSelection,
+            ),
+        colors = CardDefaults.cardColors(
+            containerColor = if (selected) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surfaceContainerLow,
+        ),
+    ) {
         Column(modifier = Modifier.padding(12.dp)) {
-            Text(item.name, style = MaterialTheme.typography.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    item.name,
+                    modifier = Modifier.weight(1f),
+                    style = MaterialTheme.typography.titleMedium,
+                    maxLines = if (compact) 2 else 3,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Checkbox(
+                    checked = selected,
+                    onCheckedChange = { onToggleSelection() },
+                    modifier = Modifier.semantics { contentDescription = item.name },
+                )
+            }
             Text(
                 text = stringResource(R.string.file_status_complete),
                 style = MaterialTheme.typography.labelSmall,
@@ -466,26 +681,32 @@ private fun ManagedFileCard(
                 text = "${stringResource(item.category.labelResource())} · ${formatFileSize(item.size)} · ${formatModified(item.modified)}",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Text(
-                text = stringResource(R.string.file_manager_location, item.location),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
+                maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                IconButton(onClick = onOpen) {
-                    Icon(Icons.AutoMirrored.Outlined.OpenInNew, contentDescription = stringResource(R.string.file_action_open))
-                }
-                IconButton(onClick = onShare) {
-                    Icon(Icons.Outlined.Share, contentDescription = stringResource(R.string.file_action_share))
-                }
-                IconButton(onClick = onRename) {
-                    Icon(Icons.Outlined.Edit, contentDescription = stringResource(R.string.file_action_rename))
-                }
-                IconButton(onClick = onDelete) {
-                    Icon(Icons.Outlined.Delete, contentDescription = stringResource(R.string.file_action_delete))
+            if (!compact) {
+                Text(
+                    text = stringResource(R.string.file_manager_location, item.location),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            if (!selectionMode && !compact) {
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                    IconButton(onClick = onOpen) {
+                        Icon(Icons.AutoMirrored.Outlined.OpenInNew, contentDescription = stringResource(R.string.file_action_open))
+                    }
+                    IconButton(onClick = onShare) {
+                        Icon(Icons.Outlined.Share, contentDescription = stringResource(R.string.file_action_share))
+                    }
+                    IconButton(onClick = onRename) {
+                        Icon(Icons.Outlined.Edit, contentDescription = stringResource(R.string.file_action_rename))
+                    }
+                    IconButton(onClick = onDelete) {
+                        Icon(Icons.Outlined.Delete, contentDescription = stringResource(R.string.file_action_delete))
+                    }
                 }
             }
         }

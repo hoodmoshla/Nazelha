@@ -156,7 +156,7 @@ data class FixedColorRoles(
     }
 }
 
-const val DEFAULT_SEED_COLOR = 0xa3d48d
+const val DEFAULT_SEED_COLOR = 0x12324A
 
 /**
  * @return a [Color] generated using [Hct] algorithm, harmonized with `primary` color

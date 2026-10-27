@@ -3,8 +3,11 @@ package com.snapnet.ui.common
 object Route {
 
     const val HOME = "home"
-    const val DOWNLOADS = "download_history"
+    const val DOWNLOADS = "downloads"
     const val FILES = "file_manager"
+    const val BROWSER = "browser"
+    const val MORE = "more"
+    const val DOWNLOAD_HISTORY = "download_history"
     const val PLAYLIST = "playlist"
     const val SETTINGS = "settings"
     const val FORMAT_SELECTION = "format"

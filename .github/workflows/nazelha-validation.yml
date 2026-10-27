@@ -4,6 +4,8 @@ on:
   push:
     branches:
       - feature/direct-http-downloads-stage1-2026-10-27
+    tags:
+      - 'nazelha-preview-v*'
   pull_request:
     branches:
       - feature/direct-http-downloads-stage1-2026-10-27
@@ -54,7 +56,7 @@ jobs:
           "-Dorg.gradle.jvmargs=-Xmx3g -Dfile.encoding=UTF-8"
           --stacktrace
 
-      - name: Verify preview identity, ABI, and signature
+      - name: Verify preview identity, ABI, version, signing, and size profile
         shell: bash
         run: |
           set -euo pipefail
@@ -63,22 +65,125 @@ jobs:
           "$tools/apksigner" verify --verbose --print-certs "$apk" | tee apk-verification.txt
           "$tools/aapt" dump badging "$apk" >> apk-verification.txt
           grep -q "package: name='com.snapnet.preview.debug'" apk-verification.txt
+          grep -q "versionCode='100070402' versionName='1.0.7-debug'" apk-verification.txt
           grep -q "application-label:'نزّلها — فيديو وملفات'" apk-verification.txt
+          grep -q 'Signer #1 certificate SHA-256 digest:' apk-verification.txt
           python3 - "$apk" <<'PY'
-          import sys, zipfile
-          with zipfile.ZipFile(sys.argv[1]) as z:
-              abis = {p.split('/')[1] for p in z.namelist() if p.startswith('lib/') and p.endswith('.so')}
-          assert abis == {'arm64-v8a'}, abis
+          import collections, json, os, sys, zipfile
+          apk=sys.argv[1]
+          with zipfile.ZipFile(apk) as z:
+              entries=[i for i in z.infolist() if not i.is_dir()]
+              abis=sorted({p.split('/')[1] for p in z.namelist() if p.startswith('lib/') and p.endswith('.so')})
+              assert abis == ['arm64-v8a'], abis
+              top=sorted(entries, key=lambda i:i.compress_size, reverse=True)[:30]
+              native=collections.defaultdict(int)
+              for i in entries:
+                  if i.filename.startswith('lib/'):
+                      native[i.filename.split('/')[2]] += i.compress_size
+              report={
+                  'apk': os.path.basename(apk),
+                  'apk_bytes': os.path.getsize(apk),
+                  'abi': abis,
+                  'native_libraries_compressed_bytes': dict(sorted(native.items(), key=lambda x:x[1], reverse=True)),
+                  'largest_entries': [{'path':i.filename,'compressed_bytes':i.compress_size,'expanded_bytes':i.file_size} for i in top],
+              }
+          with open('apk-size-profile.json','w') as f:
+              json.dump(report,f,indent=2)
+              f.write('\n')
+          print(json.dumps(report,indent=2))
           PY
           sha256sum "$apk" > "$apk.sha256"
 
-      - name: Retain the preview APK
+      - name: Retain the preview APK and verification reports
+        if: startsWith(github.ref, 'refs/tags/nazelha-preview-v')
         uses: actions/upload-artifact@v4
         with:
           name: Nazelha-preview-arm64-debug
           path: |
             app/build/outputs/apk/githubPreview/debug/*.apk
             app/build/outputs/apk/githubPreview/debug/*.sha256
+            app/build/outputs/mapping/githubPreviewDebug/mapping.txt
             apk-verification.txt
+            apk-size-profile.json
           if-no-files-found: error
           retention-days: 14
+
+      - name: Retain validation reports (never retain branch APKs)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Nazelha-validation-reports-${{ github.run_number }}
+          path: |
+            apk-verification.txt
+            apk-size-profile.json
+            app/build/test-results/testGithubPreviewDebugUnitTest/**/*.xml
+            app/build/reports/lint-results-githubPreviewDebug.html
+            app/build/reports/lint-results-githubPreviewDebug.xml
+          if-no-files-found: warn
+          retention-days: 14
+
+  android-tests:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - name: Check out Nazelha
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: gradle
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v4
+
+      - name: Run Android instrumentation tests on API 35
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          profile: pixel_2
+          emulator-options: -no-window -no-audio -no-boot-anim -gpu swiftshader_indirect -no-snapshot
+          disable-animations: true
+          script: >-
+            ./gradlew
+            :app:connectedGithubPreviewDebugAndroidTest
+            -PnoSplits
+            -PABI_FILTERS=x86_64
+            --no-daemon
+            --no-configuration-cache
+            "-Dorg.gradle.jvmargs=-Xmx3g -Dfile.encoding=UTF-8"
+            --stacktrace
+
+  publish-preview:
+    if: startsWith(github.ref, 'refs/tags/nazelha-preview-v')
+    needs:
+      - test-and-build
+      - android-tests
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - name: Download the verified ARM64 APK artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: Nazelha-preview-arm64-debug
+          path: release-assets
+
+      - name: Publish verified prerelease
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: Nazelha preview ${{ github.ref_name }}
+          prerelease: true
+          body: |
+            **ملاحظة التثبيت:** هذا الإصدار يستخدم شهادة Debug جديدة، لذلك لا يقبل التحديث فوق Nazelha 1.0.6. صدّر أي بيانات داخلية تحتاجها قبل إزالة الإصدار السابق وتثبيت هذا APK. لم تُحذف ملفات أو تقارير 1.0.6.
+          generate_release_notes: true
+          files: |
+            release-assets/*.apk
+            release-assets/*.sha256
+            release-assets/apk-verification.txt
+            release-assets/apk-size-profile.json

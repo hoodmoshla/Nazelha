@@ -30,7 +30,7 @@ android {
         applicationId = "com.snapnet.preview"
         minSdk = 24
         targetSdk = 35
-        versionCode = 100_060_400
+        versionCode = 100_070_400
         check(versionCode == currentVersionCode)
 
         versionName = baseVersionName
@@ -87,6 +87,12 @@ android {
             )
         }
         debug {
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro",
+            )
             signingConfig = signingConfigs.getByName("debug")
             applicationIdSuffix = ".debug"
             versionNameSuffix = "-debug"
@@ -178,7 +184,11 @@ dependencies {
     implementation(libs.mmkv)
 
     testImplementation(libs.junit4)
+    androidTestImplementation(platform(libs.androidx.compose.bom))
+    androidTestImplementation(libs.androidx.compose.ui.test)
     androidTestImplementation(libs.androidx.test.ext)
     androidTestImplementation(libs.androidx.test.espresso.core)
+    debugImplementation(platform(libs.androidx.compose.bom))
+    debugImplementation("androidx.compose.ui:ui-test-manifest")
     implementation(libs.androidx.compose.ui.tooling)
 }

@@ -1,29 +1,24 @@
 package com.snapnet.ui.page
 
 import android.webkit.CookieManager
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.DrawerValue
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.rememberDrawerState
+import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavGraphBuilder
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -31,10 +26,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import androidx.navigation.navigation
-import com.snapnet.App
 import com.snapnet.R
-import com.snapnet.ui.common.HapticFeedback.slightHapticFeedback
-import com.snapnet.ui.common.LocalWindowWidthState
 import com.snapnet.ui.common.Route
 import com.snapnet.ui.common.animatedComposable
 import com.snapnet.ui.common.animatedComposableVariant
@@ -43,8 +35,9 @@ import com.snapnet.ui.common.id
 import com.snapnet.ui.common.slideInVerticallyComposable
 import com.snapnet.ui.page.command.TaskListPage
 import com.snapnet.ui.page.command.TaskLogPage
-import com.snapnet.ui.page.downloadv2.configure.DownloadDialogViewModel
 import com.snapnet.ui.page.downloadv2.DownloadPageV2
+import com.snapnet.ui.page.downloadv2.configure.DownloadDialogViewModel
+import com.snapnet.ui.page.downloadv2.configure.DownloadDialogViewModel.Action
 import com.snapnet.ui.page.files.FileManagerPage
 import com.snapnet.ui.page.settings.SettingsPage
 import com.snapnet.ui.page.settings.about.AboutPage
@@ -66,29 +59,16 @@ import com.snapnet.ui.page.settings.network.NetworkPreferences
 import com.snapnet.ui.page.settings.network.WebViewPage
 import com.snapnet.ui.page.settings.troubleshooting.TroubleShootingPage
 import com.snapnet.ui.page.videolist.VideoListPage
-import kotlinx.coroutines.launch
 import org.koin.androidx.compose.koinViewModel
 
-private const val TAG = "HomeEntry"
-
-private val TopDestinations =
-    listOf(Route.HOME, Route.TASK_LIST, Route.SETTINGS_PAGE, Route.DOWNLOADS, Route.FILES)
-
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AppEntry(dialogViewModel: DownloadDialogViewModel) {
-
     val navController = rememberNavController()
-    val context = LocalContext.current
-    val view = LocalView.current
-    val windowWidth = LocalWindowWidthState.current
-    val sheetState by dialogViewModel.sheetStateFlow.collectAsStateWithLifecycle()
+    val currentRoute = navController.currentBackStackEntryAsState().value?.destination?.route
+    val topDestination = topLevelDestinationForRoute(currentRoute)
+    val appName = stringResource(R.string.app_short_name)
     val cookiesViewModel: CookiesViewModel = koinViewModel()
-
-    val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
-    val versionReport = App.packageInfo.versionName.toString()
-    val appName = stringResource(R.string.app_name)
-    val scope = rememberCoroutineScope()
-
     val onNavigateBack: () -> Unit = {
         with(navController) {
             if (currentBackStackEntry?.lifecycle?.currentState == Lifecycle.State.RESUMED) {
@@ -96,68 +76,79 @@ fun AppEntry(dialogViewModel: DownloadDialogViewModel) {
             }
         }
     }
-
-    if (sheetState is DownloadDialogViewModel.SheetState.Configure) {
-        if (navController.currentDestination?.route != Route.HOME) {
-            navController.popBackStack(route = Route.HOME, inclusive = false, saveState = true)
+    fun navigateToTop(destination: TopLevelDestination) {
+        if (currentRoute != destination.route) {
+            navController.navigate(destination.route) {
+                popUpTo(route = Route.HOME) { saveState = true }
+                launchSingleTop = true
+                restoreState = true
+            }
         }
     }
 
-    val currentRoute = navController.currentBackStackEntryAsState().value?.destination?.route
-    var currentTopDestination by rememberSaveable { mutableStateOf(currentRoute) }
-
-    LaunchedEffect(currentRoute) {
-        if (currentRoute in TopDestinations) {
-            currentTopDestination = currentRoute
-        }
-    }
-
-    Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
-        NavigationDrawer(
-            windowWidth = windowWidth,
-            drawerState = drawerState,
-            currentRoute = currentRoute,
-            currentTopDestination = currentTopDestination,
-            showQuickSettings = true,
-            gesturesEnabled = currentRoute == Route.HOME,
-            onDismissRequest = { drawerState.close() },
-            onNavigateToRoute = {
-                if (currentRoute != it) {
-                    navController.navigate(it) {
-                        launchSingleTop = true
-                        popUpTo(route = Route.HOME)
-                    }
-                }
-            },
-            footer = {
-                Text(
-                    appName + "\n" + versionReport + "\n" + currentRoute,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(start = 12.dp),
+    Scaffold(
+        modifier = Modifier.fillMaxSize(),
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
+        topBar = {
+            if (topDestination != null) {
+                TopAppBar(
+                    title = { Text(appName, style = MaterialTheme.typography.titleLarge) },
+                    actions = {
+                        IconButton(onClick = { navController.navigate(Route.SETTINGS) }) {
+                            Icon(
+                                Icons.Outlined.Settings,
+                                contentDescription = stringResource(R.string.settings),
+                            )
+                        }
+                    },
                 )
-            },
-        ) {
+            }
+        },
+        bottomBar = {
+            topDestination?.let { selected ->
+                BottomNavigationBar(selectedDestination = selected, onNavigate = ::navigateToTop)
+            }
+        },
+    ) { innerPadding ->
+        Box(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
             NavHost(
-                modifier = Modifier.align(Alignment.Center),
+                modifier = Modifier.fillMaxSize(),
                 navController = navController,
                 startDestination = Route.HOME,
             ) {
                 animatedComposable(Route.HOME) {
-                    DownloadPageV2(
-                        dialogViewModel = dialogViewModel,
-                        onMenuOpen = {
-                            view.slightHapticFeedback()
-                            scope.launch { drawerState.open() }
+                    HomeDashboard(
+                        onStartDownload = { url ->
+                            navigateToTop(TopLevelDestination.DOWNLOADS)
+                            dialogViewModel.postAction(Action.ProceedWithURLs(listOf(url)))
                         },
+                        onOpenDownloads = { navigateToTop(TopLevelDestination.DOWNLOADS) },
+                        onOpenFiles = { navigateToTop(TopLevelDestination.FILES) },
                     )
                 }
-                animatedComposable(Route.DOWNLOADS) { VideoListPage { onNavigateBack() } }
+                animatedComposable(Route.DOWNLOADS) {
+                    DownloadPageV2(dialogViewModel = dialogViewModel)
+                }
+                animatedComposable(Route.DOWNLOAD_HISTORY) {
+                    VideoListPage(onNavigateBack = onNavigateBack)
+                }
                 animatedComposable(Route.FILES) {
                     FileManagerPage(
                         onNavigateBack = onNavigateBack,
                         onOpenDirectorySettings = { navController.navigate(Route.DOWNLOAD_DIRECTORY) },
+                        showTopBar = false,
                     )
+                }
+                animatedComposable(Route.BROWSER) {
+                    BrowserPage(
+                        onDownloadLink = { url ->
+                            navigateToTop(TopLevelDestination.DOWNLOADS)
+                            dialogViewModel.postAction(Action.ProceedWithURLs(listOf(url)))
+                        }
+                    )
+                }
+                animatedComposable(Route.MORE) {
+                    MorePage(onNavigateTo = { route -> navController.navigate(route) })
                 }
                 animatedComposableVariant(Route.TASK_LIST) {
                     TaskListPage(
@@ -174,7 +165,6 @@ fun AppEntry(dialogViewModel: DownloadDialogViewModel) {
                         taskHashCode = it.arguments?.getInt(Route.TASK_HASHCODE) ?: -1,
                     )
                 }
-
                 settingsGraph(
                     onNavigateBack = onNavigateBack,
                     onNavigateTo = { route ->
@@ -183,7 +173,6 @@ fun AppEntry(dialogViewModel: DownloadDialogViewModel) {
                     cookiesViewModel = cookiesViewModel,
                 )
             }
-
             AppUpdater()
             YtdlpUpdater()
         }
