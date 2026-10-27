@@ -70,6 +70,25 @@ class RedactorTest {
     }
 
     @Test
+    fun `redacts share keys and signed download query values`() {
+        val text = "https://www.dropbox.com/scl/fi/id/file.pdf?rlkey=share-secret&dl=1 " +
+            "https://cdn.example/file?X-Amz-Signature=signed-secret&token=temporary-secret"
+        val out = Redactor.redact(text)
+        assertFalse(out.contains("share-secret"))
+        assertFalse(out.contains("signed-secret"))
+        assertFalse(out.contains("temporary-secret"))
+        assertTrue(out.contains("dl=1"))
+    }
+
+    @Test
+    fun `redacts credentials embedded in a rejected URL`() {
+        val out = Redactor.redact("https://alice:private-password@example.com/file.bin")
+        assertFalse(out.contains("alice"))
+        assertFalse(out.contains("private-password"))
+        assertTrue(out.contains("example.com"))
+    }
+
+    @Test
     fun `handles null and empty input`() {
         assertEquals("", Redactor.redact(null))
         assertEquals("", Redactor.redact(""))

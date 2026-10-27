@@ -65,6 +65,37 @@ class DownloadErrorMapperTest {
     }
 
     @Test
+    fun `classifies HTTP 401 as an authentication requirement`() {
+        assertEquals(
+            DownloadErrorKind.LOGIN_REQUIRED,
+            kindOf("ERROR: HTTP Error 401: Unauthorized"),
+        )
+    }
+
+    @Test
+    fun `classifies HTTP 403 separately without treating incidental numbers as permission errors`() {
+        assertEquals(
+            DownloadErrorKind.HTTP_FORBIDDEN,
+            kindOf("ERROR: HTTP Error 403: Forbidden"),
+        )
+        assertEquals(DownloadErrorKind.UNKNOWN, kindOf("Download failed for item 403"))
+    }
+
+    @Test
+    fun `classifies HTTP 404 and 410 as unavailable media`() {
+        assertEquals(DownloadErrorKind.VIDEO_UNAVAILABLE, kindOf("HTTP Error 404: Not Found"))
+        assertEquals(DownloadErrorKind.VIDEO_UNAVAILABLE, kindOf("HTTP Error 410: Gone"))
+    }
+
+    @Test
+    fun `detects explicit CAPTCHA verification`() {
+        assertEquals(
+            DownloadErrorKind.CAPTCHA_REQUIRED,
+            kindOf("The website requires CAPTCHA verification before continuing"),
+        )
+    }
+
+    @Test
     fun `detects rate limiting and marks it retryable`() {
         val error = DownloadError.of(RuntimeException("ERROR: HTTP Error 429: Too Many Requests"))
         assertEquals(DownloadErrorKind.RATE_LIMITED, error.kind)
@@ -92,6 +123,11 @@ class DownloadErrorMapperTest {
         val error = DownloadError.of(RuntimeException("ERROR: Unable to download webpage: connection reset"))
         assertEquals(DownloadErrorKind.NETWORK_ERROR, error.kind)
         assertTrue(error.isRetryable)
+        assertEquals(
+            DownloadErrorKind.NETWORK_ERROR,
+            kindOf("Connection ended before the announced file size was received"),
+        )
+        assertEquals(DownloadErrorKind.NETWORK_ERROR, kindOf("unexpected end of stream"))
     }
 
     @Test
@@ -108,6 +144,7 @@ class DownloadErrorMapperTest {
             DownloadErrorKind.DISK_FULL,
             kindOf("OSError: [Errno 28] No space left on device"),
         )
+        assertEquals(DownloadErrorKind.DISK_FULL, kindOf("OSError: [Errno 28] ENOSPC"))
     }
 
     @Test
@@ -128,6 +165,8 @@ class DownloadErrorMapperTest {
         val permanent =
             listOf(
                 DownloadErrorKind.LOGIN_REQUIRED,
+                DownloadErrorKind.HTTP_FORBIDDEN,
+                DownloadErrorKind.CAPTCHA_REQUIRED,
                 DownloadErrorKind.COOKIES_REQUIRED,
                 DownloadErrorKind.PO_TOKEN_REQUIRED,
                 DownloadErrorKind.GEO_BLOCKED,

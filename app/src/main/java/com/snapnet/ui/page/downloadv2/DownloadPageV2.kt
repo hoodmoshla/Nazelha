@@ -89,6 +89,8 @@ import androidx.compose.ui.unit.sp
 import androidx.constraintlayout.compose.ConstraintLayout
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.snapnet.R
+import com.snapnet.download.DownloadErrorKind
+import com.snapnet.download.DownloadErrorMapper
 import com.snapnet.download.DownloaderV2
 import com.snapnet.download.Task
 import com.snapnet.download.Task.DownloadState.Canceled
@@ -118,6 +120,7 @@ import com.snapnet.ui.svg.drawablevectors.download
 import com.snapnet.ui.theme.SealTheme
 import com.snapnet.util.DownloadUtil
 import com.snapnet.util.FileUtil
+import com.snapnet.util.Redactor
 import com.snapnet.util.getErrorReport
 import com.snapnet.util.makeToast
 import kotlinx.coroutines.CoroutineScope
@@ -129,6 +132,27 @@ import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
 
 private const val TAG = "DownloadPageV2"
+
+private val URL_QUERY_PARAMETER = Regex("""([?&][^=&#\s]+=)[^&#\s]*""")
+
+internal fun downloadErrorMessageRes(throwable: Throwable): Int =
+    when (DownloadErrorMapper.classify(throwable.message ?: throwable.toString())) {
+        DownloadErrorKind.NETWORK_ERROR -> R.string.download_error_network
+        DownloadErrorKind.DISK_FULL -> R.string.download_error_disk_full
+        DownloadErrorKind.LOGIN_REQUIRED,
+        DownloadErrorKind.COOKIES_REQUIRED -> R.string.download_error_auth
+        DownloadErrorKind.HTTP_FORBIDDEN -> R.string.download_error_forbidden
+        DownloadErrorKind.VIDEO_UNAVAILABLE,
+        DownloadErrorKind.GEO_BLOCKED -> R.string.download_error_unavailable
+        DownloadErrorKind.CAPTCHA_REQUIRED -> R.string.download_error_captcha
+        else -> R.string.download_error_msg
+    }
+
+/** Redacts credential-shaped text and every URL query value before details leave the error UI. */
+internal fun redactDownloadErrorDetails(text: String): String =
+    Redactor.redact(text).replace(URL_QUERY_PARAMETER) { match ->
+        match.groupValues[1] + Redactor.MASK
+    }
 
 enum class Filter {
     All,
@@ -225,7 +249,9 @@ fun DownloadPageV2(
             UiAction.Resume -> downloader.restart(task)
             is UiAction.CopyErrorReport -> {
                 clipboardManager.setText(
-                    AnnotatedString(getErrorReport(action.throwable, task.url))
+                    AnnotatedString(
+                        redactDownloadErrorDetails(getErrorReport(action.throwable, task.url))
+                    )
                 )
                 context.makeToast(R.string.error_copied)
             }

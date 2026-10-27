@@ -20,6 +20,11 @@ object Redactor {
 
     private val RULES: List<Rule> =
         listOf(
+            Rule(Regex("""(?i)(https?://)[^/\s@]+(?=@)"""), keepLabel = true),
+            Rule(
+                Regex("""(?i)([?&](?:token|auth|authorization|access[_-]?token|auth[_-]?token|api[_-]?key|key|rlkey|resourcekey|sig|signature|policy|x-amz-[a-z0-9-]+|x-goog-[a-z0-9-]+)=)([^&#\s\"<>]+)"""),
+                keepLabel = true,
+            ),
             Rule(Regex("""(?i)(bearer\s+)([A-Za-z0-9._~+/=-]+)"""), keepLabel = true),
             Rule(Regex("""(?i)(authorization\s*[:=]\s*)(\S+)"""), keepLabel = true),
             Rule(Regex("""(?i)(set-cookie\s*:\s*)(.+)"""), keepLabel = true),

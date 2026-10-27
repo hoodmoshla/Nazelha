@@ -121,6 +121,8 @@ import com.snapnet.ui.page.downloadv2.configure.DownloadDialogViewModel.SheetSta
 import com.snapnet.ui.page.downloadv2.configure.DownloadDialogViewModel.SheetState.Error
 import com.snapnet.ui.page.downloadv2.configure.DownloadDialogViewModel.SheetState.InputUrl
 import com.snapnet.ui.page.downloadv2.configure.DownloadDialogViewModel.SheetState.Loading
+import com.snapnet.ui.page.downloadv2.downloadErrorMessageRes
+import com.snapnet.ui.page.downloadv2.redactDownloadErrorDetails
 import com.snapnet.ui.page.settings.command.CommandTemplateDialog
 import com.snapnet.ui.page.settings.format.AudioQuickSettingsDialog
 import com.snapnet.ui.page.settings.format.VideoQuickSettingsDialog
@@ -314,7 +316,13 @@ private fun ErrorPage(modifier: Modifier = Modifier, state: Error, onActionPost:
             modifier = Modifier.padding(top = 12.dp),
         )
         Text(
-            text = state.throwable.message.toString(),
+            text = stringResource(downloadErrorMessageRes(state.throwable)),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.error,
+            modifier = Modifier.padding(top = 8.dp, horizontal = 20.dp),
+        )
+        Text(
+            text = redactDownloadErrorDetails(state.throwable.message.toString()),
             style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier =
@@ -333,7 +341,10 @@ private fun ErrorPage(modifier: Modifier = Modifier, state: Error, onActionPost:
                     view.longPressHapticFeedback()
                     clipboardManager.setText(
                         AnnotatedString(
-                            App.getVersionReport() + "\nURL: ${url}\n${state.throwable.message}"
+                            redactDownloadErrorDetails(
+                                App.getVersionReport() +
+                                    "\nURL: ${url}\n${state.throwable.message}"
+                            )
                         )
                     )
                     ToastUtil.makeToast(R.string.error_copied)

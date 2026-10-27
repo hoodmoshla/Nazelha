@@ -11,6 +11,12 @@ enum class DownloadErrorKind {
     /** The site needs an authenticated session before media can be resolved. */
     LOGIN_REQUIRED,
 
+    /** The server explicitly denied the request (HTTP 403); this does not imply sign-in is needed. */
+    HTTP_FORBIDDEN,
+
+    /** The site requires interactive CAPTCHA or human verification. */
+    CAPTCHA_REQUIRED,
+
     /** The site needs cookies supplied by the user (sign-in wall, age gate, consent wall). */
     COOKIES_REQUIRED,
 
@@ -104,6 +110,33 @@ object DownloadErrorMapper {
             // --- DRM: must be checked before the generic "unavailable" rules ---
             DownloadErrorKind.DRM_PROTECTED to
                 listOf("drm", "protected by widevine", "widevine", "playready", "fairplay"),
+            // --- Explicit verification and HTTP authorization responses ---
+            DownloadErrorKind.CAPTCHA_REQUIRED to
+                listOf(
+                    "captcha",
+                    "human verification",
+                    "verify that you are human",
+                    "verify you're human",
+                    "complete the challenge",
+                    "robot check",
+                    "are you a robot",
+                ),
+            DownloadErrorKind.LOGIN_REQUIRED to
+                listOf(
+                    "http error 401",
+                    "http 401",
+                    "status code 401",
+                    "401 unauthorized",
+                    "unauthorized (401)",
+                ),
+            DownloadErrorKind.HTTP_FORBIDDEN to
+                listOf(
+                    "http error 403",
+                    "http 403",
+                    "status code 403",
+                    "403 forbidden",
+                    "forbidden (403)",
+                ),
             // --- Sign-in / cookie walls ---
             DownloadErrorKind.PO_TOKEN_REQUIRED to
                 listOf("po_token", "po token", "potoken", "missing_pot", "failed to fetch pot"),
@@ -155,8 +188,14 @@ object DownloadErrorMapper {
                     "private video",
                     "removed by the uploader",
                     "account has been terminated",
-                    "404",
-                    "410",
+                    "http error 404",
+                    "http 404",
+                    "status code 404",
+                    "404 not found",
+                    "http error 410",
+                    "http 410",
+                    "status code 410",
+                    "410 gone",
                 ),
             // --- Rate limiting ---
             DownloadErrorKind.RATE_LIMITED to
@@ -194,6 +233,8 @@ object DownloadErrorMapper {
                     "name or service not known",
                     "connection reset",
                     "connection refused",
+                    "connection ended before the announced file size was received",
+                    "unexpected end of stream",
                     "timed out",
                     "timeout",
                     "temporary failure in name resolution",

@@ -413,7 +413,7 @@ fun ListItemStateText(
             when (downloadState) {
                 is Canceled -> stringResource(R.string.status_canceled)
                 is Completed -> stringResource(R.string.status_downloaded)
-                is Error -> stringResource(R.string.status_error)
+                is Error -> stringResource(downloadErrorMessageRes(downloadState.throwable))
                 is FetchingInfo -> stringResource(R.string.status_fetching_video_info)
                 Idle -> stringResource(R.string.status_enqueued)
                 ReadyWithInfo -> stringResource(R.string.status_enqueued)
