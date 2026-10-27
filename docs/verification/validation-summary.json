@@ -1,0 +1,230 @@
+{
+  "source_commit": "a3b5ef20b16fff5389dfe3ff7f0be7143175c90e",
+  "command_result": "BUILD SUCCESSFUL in 3m 21s",
+  "tasks": [
+    ":app:testGithubPreviewDebugUnitTest",
+    ":app:lintGithubPreviewDebug"
+  ],
+  "live_http_tests_enabled": true,
+  "junit_totals": {
+    "tests": 117,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "test_classes": [
+    {
+      "class": "com.snapnet.DownloadServiceWorkTrackerTest",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 0.073
+    },
+    {
+      "class": "com.snapnet.ExampleUnitTest",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 0.017
+    },
+    {
+      "class": "com.snapnet.download.DirectHttpTempFileNamesTest",
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 0.012
+    },
+    {
+      "class": "com.snapnet.download.DownloadConcurrencyPolicyTest",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 0.005
+    },
+    {
+      "class": "com.snapnet.download.DownloadErrorMapperTest",
+      "tests": 20,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 0.022
+    },
+    {
+      "class": "com.snapnet.download.DownloadStoragePolicyTest",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 0.001
+    },
+    {
+      "class": "com.snapnet.download.RetryPolicyTest",
+      "tests": 6,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 0.007
+    },
+    {
+      "class": "com.snapnet.download.http.DirectHttpResumeSafetyTest",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 0.385
+    },
+    {
+      "class": "com.snapnet.download.http.DirectHttpTransferTest",
+      "tests": 15,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 1.012
+    },
+    {
+      "class": "com.snapnet.download.http.DropboxDownloadUrlHandlerTest",
+      "tests": 5,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 0.003
+    },
+    {
+      "class": "com.snapnet.download.http.GitHubDownloadUrlHandlerTest",
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 0.003
+    },
+    {
+      "class": "com.snapnet.download.http.PublicInternetDnsTest",
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 0.001
+    },
+    {
+      "class": "com.snapnet.ui.page.files.FileManagerClassifierTest",
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 0.002
+    },
+    {
+      "class": "com.snapnet.util.DownloadNotificationPolicyTest",
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 0.004
+    },
+    {
+      "class": "com.snapnet.util.FileNamingTest",
+      "tests": 19,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 0.024
+    },
+    {
+      "class": "com.snapnet.util.FormatPickerOptionsTest",
+      "tests": 9,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 0.04
+    },
+    {
+      "class": "com.snapnet.util.RedactorTest",
+      "tests": 13,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 0.011
+    },
+    {
+      "class": "com.snapnet.util.YtDlpChecksumTest",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 0.009
+    }
+  ],
+  "prior_test_cases_missing": [],
+  "new_test_case_count": 22,
+  "lint_counts": {
+    "Warning": 203,
+    "Information": 1
+  },
+  "lint_counts_before_review": {
+    "Warning": 205,
+    "Information": 2
+  },
+  "new_lint_issues_since_review": [
+    {
+      "id": "PluralsCandidate",
+      "message": "Formatting %d followed by words (\"files\"): This should probably be a plural rather than a string",
+      "files": [
+        "app/src/main/res/values/strings.xml"
+      ],
+      "count": 1
+    },
+    {
+      "id": "UnusedResources",
+      "message": "The resource `R.drawable.ic_launcher_foreground` appears to be unused",
+      "files": [
+        "app/src/main/res/drawable/ic_launcher_foreground.xml"
+      ],
+      "count": 1
+    },
+    {
+      "id": "UnusedResources",
+      "message": "The resource `R.drawable.ic_launcher_monochrome` appears to be unused",
+      "files": [
+        "app/src/main/res/drawable/ic_launcher_monochrome.xml"
+      ],
+      "count": 1
+    },
+    {
+      "id": "UsableSpace",
+      "message": "Consider also using `StorageManager#getAllocatableBytes` and `allocateBytes` which will consider clearable cached data",
+      "files": [
+        "app/src/main/java/com/snapnet/download/http/DirectHttpDownloader.kt"
+      ],
+      "count": 1
+    },
+    {
+      "id": "UsableSpace",
+      "message": "Consider also using `StorageManager#getAllocatableBytes` and `allocateBytes` which will consider clearable cached data",
+      "files": [
+        "app/src/main/java/com/snapnet/download/DownloaderV2.kt"
+      ],
+      "count": 1
+    },
+    {
+      "id": "IconLauncherShape",
+      "message": "Launcher icon used as round icon did not have a circular shape",
+      "files": [
+        "app/src/main/res/mipmap-hdpi/ic_launcher_round.png"
+      ],
+      "count": 1
+    }
+  ],
+  "removed_lint_issue_ids": {
+    "AutoboxingStateCreation": 1,
+    "UnusedResources": 1,
+    "IconXmlAndPng": 1,
+    "IconLauncherShape": 5,
+    "IconDuplicates": 1
+  },
+  "final_signed_apk_after_review": false,
+  "physical_android_test_performed": false
+}

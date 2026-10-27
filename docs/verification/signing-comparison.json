@@ -1,0 +1,8 @@
+{
+  "application_id": "com.snapnet.preview.debug",
+  "stage1_apk_certificate_sha256": "68462701a4a718f0a2cb94c86529258df2a870d28b5c241f8b85e58b9050acad",
+  "local_pre_review_debug_certificate_sha256": "8e2c62c2b769ec92012814e31401024042555f074894487d0efa0f183a197409",
+  "certificates_match": false,
+  "final_apk_status": "not built or distributed after final review; signing compatibility decision pending",
+  "private_key_material_included": false
+}
