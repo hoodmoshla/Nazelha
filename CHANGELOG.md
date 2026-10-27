@@ -26,12 +26,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Replace the navigation drawer with an RTL-aware five-destination bottom bar and a link-focused home dashboard.
 - Add an in-app browser, a downloads summary and filters, file grid/list views, and multi-file selection and sharing.
 - Add unit and emulator UI coverage for navigation ordering, selection state, download filters, dashboard counts, and file selection.
+- Add regression tests that restrict external browser schemes to safe, user-initiated actions.
 
 ### Changed
 
 - Refresh the Arabic-first color system with navy and teal light/dark palettes.
 - Enable R8 and resource shrinking for the Debug-signed preview while retaining the current media engines and application ID.
 - Extend GitHub Actions to run API 35 instrumentation tests and publish a prerelease only after validation succeeds.
+
+### Security
+
+- Keep HTTP(S) navigation inside WebView; block `file:`, `content:`, `javascript:`, `intent:`, and unknown external schemes. Open only `mailto:`, `tel:`, `sms:`, or `geo:` after a user gesture.
 
 ### Installation note
 

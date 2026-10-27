@@ -55,6 +55,13 @@ import com.snapnet.R
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
 
+private val SAFE_EXTERNAL_BROWSER_SCHEMES = setOf("mailto", "tel", "sms", "geo")
+
+internal fun isSafeExternalBrowserScheme(scheme: String?, hasGesture: Boolean): Boolean {
+    val normalizedScheme = scheme?.lowercase() ?: return false
+    return hasGesture && normalizedScheme in SAFE_EXTERNAL_BROWSER_SCHEMES
+}
+
 @Composable
 fun BrowserPage(
     onDownloadLink: (String) -> Unit,
@@ -92,8 +99,11 @@ fun BrowserPage(
                     val uri = request.url
                     val scheme = uri.scheme?.lowercase()
                     if (scheme == "http" || scheme == "https") return false
+                    if (!isSafeExternalBrowserScheme(scheme, request.hasGesture)) return true
                     return try {
-                        context.startActivity(Intent(Intent.ACTION_VIEW, uri))
+                        context.startActivity(
+                            Intent(Intent.ACTION_VIEW, uri).addCategory(Intent.CATEGORY_BROWSABLE)
+                        )
                         true
                     } catch (_: Exception) {
                         true
