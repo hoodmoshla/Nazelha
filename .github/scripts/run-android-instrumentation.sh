@@ -4,6 +4,7 @@
 set +e
 
 mkdir -p android-test-diagnostics
+
 timeout 15s adb devices -l > android-test-diagnostics/adb-before.txt 2>&1
 capture_diagnostics() {
   timeout 20s adb logcat -d -v threadtime -t 20000 > android-test-diagnostics/logcat.txt 2>&1 || true
@@ -22,22 +23,52 @@ if [ "$boot_status" != "1" ]; then
   exit 3
 fi
 
+run_gradle() {
+  local label="$1"
+  shift
+  timeout --signal=INT --kill-after=30s 10m ./gradlew "$@" \
+    --no-daemon \
+    --no-configuration-cache \
+    "-Dorg.gradle.jvmargs=-Xmx3g -Dfile.encoding=UTF-8" \
+    --stacktrace --info --console=plain \
+    > "android-test-diagnostics/gradle-${label}.log" 2>&1
+  local status=$?
+  printf '%s\n' "$status" > "android-test-diagnostics/gradle-${label}-exit-code.txt"
+  return "$status"
+}
+
+# Compose UI tests use test-only Compose/Kotlin APIs. Run the UI target without R8;
+# the separate validation job still builds and measures the minified preview APK.
 timeout 15s adb logcat -c || true
-timeout --signal=INT --kill-after=30s 15m ./gradlew \
+run_gradle ui-tests \
   :app:connectedGithubPreviewDebugAndroidTest \
   -PnoSplits \
   -PABI_FILTERS=x86_64 \
-  --no-daemon \
-  --no-configuration-cache \
-  "-Dorg.gradle.jvmargs=-Xmx3g -Dfile.encoding=UTF-8" \
-  --stacktrace --info --console=plain \
-  > android-test-diagnostics/gradle.log 2>&1
-gradle_status=$?
-printf '%s\n' "$gradle_status" > android-test-diagnostics/gradle-exit-code.txt
+  -PnazelhaUiTestsWithoutR8=true
+ui_status=$?
+if [ "$ui_status" -ne 0 ]; then
+  printf '%s\n' "$ui_status" > android-test-diagnostics/gradle-exit-code.txt
+  timeout 15s adb devices -l > android-test-diagnostics/adb-after.txt 2>&1 || true
+  capture_diagnostics
+  printf 'UI instrumentation exit code: %s\n' "$ui_status"
+  tail -n 180 android-test-diagnostics/gradle-ui-tests.log
+  exit "$ui_status"
+fi
+
+# Also boot the actual minified Debug preview and run its non-Compose smoke test.
+# This checks the distributed R8 artifact without injecting test-only keep rules into it.
+timeout 15s adb logcat -c || true
+run_gradle minified-smoke \
+  :app:connectedGithubPreviewDebugAndroidTest \
+  -Pandroid.testInstrumentationRunnerArguments.class=com.snapnet.ExampleInstrumentedTest \
+  -PnoSplits \
+  -PABI_FILTERS=x86_64
+smoke_status=$?
+printf '%s\n' "$smoke_status" > android-test-diagnostics/gradle-exit-code.txt
 
 timeout 15s adb devices -l > android-test-diagnostics/adb-after.txt 2>&1 || true
 capture_diagnostics
-printf 'Gradle exit code: %s\n' "$gradle_status"
-cat android-test-diagnostics/adb-after.txt
-tail -n 220 android-test-diagnostics/gradle.log
-exit "$gradle_status"
+printf 'UI instrumentation exit code: %s\nMinified preview smoke exit code: %s\n' "$ui_status" "$smoke_status"
+tail -n 180 android-test-diagnostics/gradle-ui-tests.log
+tail -n 180 android-test-diagnostics/gradle-minified-smoke.log
+exit "$smoke_status"

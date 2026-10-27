@@ -87,12 +87,13 @@ android {
             )
         }
         debug {
-            isMinifyEnabled = true
-            isShrinkResources = true
+            val minifyDebugTarget =
+                project.providers.gradleProperty("nazelhaUiTestsWithoutR8").orNull != "true"
+            isMinifyEnabled = minifyDebugTarget
+            isShrinkResources = minifyDebugTarget
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
-                "proguard-rules-debug.pro",
             )
             signingConfig = signingConfigs.getByName("debug")
             applicationIdSuffix = ".debug"
