@@ -319,7 +319,7 @@ private fun ErrorPage(modifier: Modifier = Modifier, state: Error, onActionPost:
             text = stringResource(downloadErrorMessageRes(state.throwable)),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.error,
-            modifier = Modifier.padding(top = 8.dp, horizontal = 20.dp),
+            modifier = Modifier.padding(top = 8.dp, start = 20.dp, end = 20.dp),
         )
         Text(
             text = redactDownloadErrorDetails(state.throwable.message.toString()),
