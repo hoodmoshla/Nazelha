@@ -1,5 +1,6 @@
 package com.snapnet.download.http
 
+import java.io.ByteArrayOutputStream
 import java.io.IOException
 import java.net.InetAddress
 import java.net.URLDecoder
@@ -9,6 +10,7 @@ import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
+import com.snapnet.download.HttpStatusException
 import okhttp3.Call
 import okhttp3.CookieJar
 import okhttp3.Dns
@@ -32,6 +34,7 @@ class DirectHttpLinkResolver(private val client: OkHttpClient = DirectHttpClient
         }
         val initial = GitHubDownloadUrlHandler.normalize(original)
             ?: DropboxDownloadUrlHandler.normalize(original)
+            ?: GoogleDriveDownloadUrlHandler.normalize(original)
             ?: original
         if (!shouldProbeHost(initial.host)) return null
         val handle = taskKey?.let { key -> WorkHandle().also { active[key] = it } }
@@ -45,15 +48,63 @@ class DirectHttpLinkResolver(private val client: OkHttpClient = DirectHttpClient
                     if (fromHead != null) return fromHead
                     if (response.looksLikeHtmlPage()) return null
                 } else {
-                    return null
+                    throw HttpStatusException(response.code)
                 }
             }
 
             checkNotCanceled(handle)
             val probe = executeFollowingRedirects(initial, "GET", "bytes=0-0", taskKey, handle)
             probe.use { response ->
-                if (!response.isSuccessful) return null
+                if (!response.isSuccessful) throw HttpStatusException(response.code)
                 return response.toDirectFileOrNull()
+            }
+        } finally {
+            if (taskKey != null && handle != null) active.remove(taskKey, handle)
+        }
+    }
+
+    /**
+     * Reads one bounded HTML page and returns candidate file anchors. Candidates are only displayed;
+     * this method never fetches them, executes scripts, or forwards cookies or authorization headers.
+     */
+    @Throws(IOException::class)
+    fun discoverPageDownloads(url: String, taskKey: String? = null): List<DiscoveredDownloadLink> {
+        val original = url.trim().toHttpUrlOrNull() ?: return emptyList()
+        if (original.scheme != "http" && original.scheme != "https") return emptyList()
+        if (original.username.isNotEmpty() || original.password.isNotEmpty()) {
+            throw IOException("Credentials in URLs are not supported")
+        }
+        val initial =
+            GitHubDownloadUrlHandler.normalize(original)
+                ?: DropboxDownloadUrlHandler.normalize(original)
+                ?: GoogleDriveDownloadUrlHandler.normalize(original)
+                ?: original
+        if (!shouldProbeHost(initial.host) || isGoogleDriveHost(initial.host)) return emptyList()
+
+        val handle = taskKey?.let { key -> WorkHandle().also { active[key] = it } }
+        try {
+            val response = executeFollowingRedirects(initial, "GET", null, taskKey, handle)
+            response.use { result ->
+                if (!result.isSuccessful || !result.looksLikeHtmlPage()) return emptyList()
+                val body = result.body ?: return emptyList()
+                if (body.contentLength() > WebPageLinkDiscovery.MAX_HTML_BYTES) return emptyList()
+                val bytes =
+                    body.byteStream().use { input ->
+                        val output = ByteArrayOutputStream()
+                        val buffer = ByteArray(8 * 1024)
+                        var total = 0
+                        while (true) {
+                            checkNotCanceled(handle)
+                            val count = input.read(buffer)
+                            if (count < 0) break
+                            if (total + count > WebPageLinkDiscovery.MAX_HTML_BYTES) return emptyList()
+                            output.write(buffer, 0, count)
+                            total += count
+                        }
+                        output.toByteArray()
+                    }
+                val charset = body.contentType()?.charset(StandardCharsets.UTF_8) ?: StandardCharsets.UTF_8
+                return WebPageLinkDiscovery.extract(String(bytes, charset), result.request.url.toString())
             }
         } finally {
             if (taskKey != null && handle != null) active.remove(taskKey, handle)
@@ -122,10 +173,7 @@ class DirectHttpLinkResolver(private val client: OkHttpClient = DirectHttpClient
         val html = contentType == "text/html" || contentType == "application/xhtml+xml"
 
         val recognizedAsFile =
-            isAttachment ||
-                dispositionName != null ||
-                (html && hasPathExtension) ||
-                (!html && (contentType != null || hasPathExtension))
+            isAttachment || dispositionName != null || (!html && (contentType != null || hasPathExtension))
         if (!recognizedAsFile) return null
 
         val safeName = FileNamingSupport.safeFileName(dispositionName ?: pathName, contentType)
@@ -148,10 +196,8 @@ class DirectHttpLinkResolver(private val client: OkHttpClient = DirectHttpClient
     private fun Response.looksLikeHtmlPage(): Boolean {
         val type = header("Content-Type")?.substringBefore(';')?.trim()?.lowercase(Locale.ROOT)
         val hasDownloadName = parseDispositionFileName(header("Content-Disposition")) != null
-        val pathHasExtension = request.url.encodedPathSegments.lastOrNull().orEmpty().contains('.')
         return (type == "text/html" || type == "application/xhtml+xml") &&
-            !hasDownloadName &&
-            !pathHasExtension
+            !hasDownloadName
     }
 
     private fun checkNotCanceled(handle: WorkHandle?) {
@@ -187,6 +233,11 @@ class DirectHttpLinkResolver(private val client: OkHttpClient = DirectHttpClient
             val normalizedHost = host.lowercase(Locale.ROOT)
             return VIDEO_PAGE_HOSTS.none { normalizedHost == it || normalizedHost.endsWith(".$it") }
         }
+
+        private fun isGoogleDriveHost(host: String): Boolean =
+            host.equals("drive.google.com", ignoreCase = true) ||
+                host.equals("docs.google.com", ignoreCase = true) ||
+                host.equals("drive.usercontent.google.com", ignoreCase = true)
 
         private fun parseContentRangeTotal(value: String?): Long? =
             value?.substringAfterLast('/')?.takeUnless { it == "*" }?.toLongOrNull()
@@ -269,6 +320,12 @@ internal object PublicInternetDns : Dns {
             if (first == 0x20 && second == 0x02) return false // 6to4 can encode private IPv4.
             if (bytes[0] == 0x00 && bytes[1] == 0x64 && bytes[2] == 0xff && bytes[3] == 0x9b) {
                 return false // Well-known NAT64 prefix can encode a private IPv4 target.
+            }
+            if (
+                bytes[0] == 0x00 && bytes[1] == 0x64 && bytes[2] == 0xff && bytes[3] == 0x9b &&
+                    bytes[4] == 0x00 && bytes[5] == 0x01
+            ) {
+                return false // Local-use NAT64 prefix 64:ff9b:1::/48 may encode private IPv4.
             }
             if (first == 0x01 && bytes.drop(1).take(7).all { it == 0 }) {
                 return false // Discard-only 100::/64.

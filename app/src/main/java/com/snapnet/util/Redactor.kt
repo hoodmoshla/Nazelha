@@ -22,7 +22,7 @@ object Redactor {
         listOf(
             Rule(Regex("""(?i)(https?://)[^/\s@]+(?=@)"""), keepLabel = true),
             Rule(
-                Regex("""(?i)([?&](?:token|auth|authorization|access[_-]?token|auth[_-]?token|api[_-]?key|key|rlkey|resourcekey|sig|signature|policy|x-amz-[a-z0-9-]+|x-goog-[a-z0-9-]+)=)([^&#\s\"<>]+)"""),
+                Regex("""(?i)([?&](?:token|auth|authorization|access[_-]?token|auth[_-]?token|api[_-]?key|key|rlkey|resourcekey|sig|signature|policy|expires|aws[_-]?access[_-]?key[_-]?id|google[_-]?access[_-]?id|key-pair-id|x-amz-[a-z0-9-]+|x-goog-[a-z0-9-]+)=)([^&#\s\"<>]+)"""),
                 keepLabel = true,
             ),
             Rule(Regex("""(?i)(bearer\s+)([A-Za-z0-9._~+/=-]+)"""), keepLabel = true),
@@ -40,6 +40,7 @@ object Redactor {
             Rule(Regex("""\b(?:AKIA|ASIA)[0-9A-Z]{16}\b""")),
             Rule(Regex("""-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----""")),
         )
+    private val URL_PATTERN = Regex("""(?i)\bhttps?://[^\s"'<>]+""")
 
     /** @return [input] with anything credential-shaped replaced by [MASK]. */
     fun redact(input: String?): String {
@@ -57,4 +58,10 @@ object Redactor {
         }
         return out
     }
+
+    /** Redact credential-shaped text and replace complete HTTP(S) URLs in logs and exports. */
+    fun redactUrls(input: String?): String = URL_PATTERN.replace(redact(input)) { "<redacted-url>" }
+
+    /** A URL field in a manual backup is intentionally not restorable as a working source link. */
+    fun redactUrl(input: String?): String = redactUrls(input)
 }

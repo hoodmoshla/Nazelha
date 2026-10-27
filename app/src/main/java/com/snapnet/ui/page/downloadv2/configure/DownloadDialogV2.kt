@@ -118,6 +118,7 @@ import com.snapnet.ui.page.downloadv2.configure.DownloadDialogViewModel.Action
 import com.snapnet.ui.page.downloadv2.configure.DownloadDialogViewModel.SelectionState
 import com.snapnet.ui.page.downloadv2.configure.DownloadDialogViewModel.SheetState.Configure
 import com.snapnet.ui.page.downloadv2.configure.DownloadDialogViewModel.SheetState.DirectHttpPreview
+import com.snapnet.ui.page.downloadv2.configure.DownloadDialogViewModel.SheetState.DiscoveredPageLinks
 import com.snapnet.ui.page.downloadv2.configure.DownloadDialogViewModel.SheetState.Error
 import com.snapnet.ui.page.downloadv2.configure.DownloadDialogViewModel.SheetState.InputUrl
 import com.snapnet.ui.page.downloadv2.configure.DownloadDialogViewModel.SheetState.Loading
@@ -431,6 +432,10 @@ private fun DownloadDialogContent(
                 )
             }
 
+            is DiscoveredPageLinks -> {
+                DiscoveredPageLinksPage(state = state, onActionPost = onActionPost)
+            }
+
             is Loading -> {
                 Column(modifier = Modifier.fillMaxWidth().padding(vertical = 120.dp)) {
                     CircularProgressIndicator(
@@ -498,6 +503,65 @@ private fun DirectHttpFilePreviewPage(
             FilledTonalButton(onClick = { onActionPost(Action.HideSheet) }) {
                 Text(stringResource(R.string.cancel))
             }
+        }
+    }
+}
+
+@Composable
+private fun DiscoveredPageLinksPage(
+    state: DiscoveredPageLinks,
+    onActionPost: (Action) -> Unit,
+) {
+    Column(
+        modifier = Modifier.fillMaxWidth().padding(24.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Text(
+            text = stringResource(R.string.web_page_links_title),
+            style = MaterialTheme.typography.titleLarge,
+        )
+        Text(
+            text = stringResource(R.string.web_page_links_description),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Column(
+            modifier =
+                Modifier.fillMaxWidth()
+                    .heightIn(max = 360.dp)
+                    .verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            state.links.forEach { link ->
+                Surface(
+                    modifier =
+                        Modifier.fillMaxWidth().clickable {
+                            onActionPost(Action.ProceedWithURLs(listOf(link.url)))
+                        },
+                    shape = RoundedCornerShape(16.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant,
+                ) {
+                    Column(
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        Text(
+                            text = link.label,
+                            style = MaterialTheme.typography.titleMedium,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        Text(
+                            text = stringResource(R.string.web_page_link_source, link.host),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+            }
+        }
+        FilledTonalButton(onClick = { onActionPost(Action.HideSheet) }) {
+            Text(stringResource(R.string.cancel))
         }
     }
 }

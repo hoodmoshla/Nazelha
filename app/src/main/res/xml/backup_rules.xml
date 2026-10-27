@@ -5,4 +5,6 @@
     <exclude domain="database" path="app_database-wal" />
     <exclude domain="database" path="app_database-shm" />
     <exclude domain="database" path="app_database-journal" />
+    <!-- The dedicated task queue stores source URLs that may contain temporary signed tokens. -->
+    <exclude domain="file" path="mmkv/download_tasks" />
 </full-backup-content>

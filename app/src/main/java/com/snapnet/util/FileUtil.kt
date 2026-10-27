@@ -15,7 +15,7 @@ import androidx.documentfile.provider.DocumentFile
 import com.snapnet.App.Companion.context
 import com.snapnet.R
 import java.io.File
-import okhttp3.internal.closeQuietly
+import java.io.IOException
 
 const val AUDIO_REGEX = "(mp3|aac|opus|m4a)$"
 const val THUMBNAIL_REGEX = "\\.(jpg|png)$"
@@ -127,7 +127,11 @@ object FileUtil {
             }
 
     @CheckResult
-    fun moveFilesToSdcard(tempPath: File, sdcardUri: String): Result<List<String>> {
+    fun moveFilesToSdcard(
+        tempPath: File,
+        sdcardUri: String,
+        checkActive: () -> Unit = {},
+    ): Result<List<String>> {
         val uriList = mutableListOf<String>()
         val destDir =
             Uri.parse(sdcardUri).run {
@@ -138,28 +142,54 @@ object FileUtil {
             }
         val res =
             tempPath.runCatching {
-                walkTopDown().forEach {
-                    if (it.isDirectory) return@forEach
-                    val mimeType =
-                        MimeTypeMap.getSingleton().getMimeTypeFromExtension(it.extension) ?: "*/*"
+                val createdDocuments = mutableListOf<Uri>()
+                try {
+                    walkTopDown().forEach { file ->
+                        if (file.isDirectory) return@forEach
+                        checkActive()
+                        val mimeType =
+                            MimeTypeMap.getSingleton().getMimeTypeFromExtension(file.extension) ?: "*/*"
 
-                    val destUri =
-                        DocumentsContract.createDocument(
-                            context.contentResolver,
-                            destDir,
-                            mimeType,
-                            it.name,
-                        ) ?: return@forEach
+                        val destUri =
+                            DocumentsContract.createDocument(
+                                context.contentResolver,
+                                destDir,
+                                mimeType,
+                                file.name,
+                            ) ?: throw IOException("Could not create the selected SD card file")
+                        createdDocuments += destUri
 
-                    val inputStream = it.inputStream()
-                    val outputStream =
-                        context.contentResolver.openOutputStream(destUri) ?: return@forEach
-                    inputStream.copyTo(outputStream)
-                    inputStream.closeQuietly()
-                    outputStream.closeQuietly()
-                    uriList.add(destUri.toString())
+                        try {
+                            file.inputStream().use { input ->
+                                val outputStream =
+                                    context.contentResolver.openOutputStream(destUri)
+                                        ?: throw IOException("Could not open the selected SD card file")
+                                outputStream.use { output ->
+                                    val buffer = ByteArray(64 * 1024)
+                                    while (true) {
+                                        checkActive()
+                                        val count = input.read(buffer)
+                                        if (count < 0) break
+                                        if (count == 0) continue
+                                        output.write(buffer, 0, count)
+                                    }
+                                    checkActive()
+                                    output.flush()
+                                }
+                            }
+                            uriList.add(destUri.toString())
+                        } catch (failure: Throwable) {
+                            runCatching { context.contentResolver.delete(destUri, null, null) }
+                            throw failure
+                        }
+                    }
+                    uriList
+                } catch (failure: Throwable) {
+                    createdDocuments.forEach { uri ->
+                        runCatching { context.contentResolver.delete(uri, null, null) }
+                    }
+                    throw failure
                 }
-                uriList
             }
         tempPath.deleteRecursively()
         return res
@@ -209,7 +239,7 @@ object FileUtil {
                 mkdirs()
                 resolve(fileName).apply { this@apply.createNewFile() }
             }
-            .onFailure { it.printStackTrace() }
+            .onFailure { Log.w(TAG, Redactor.redactUrls(it.stackTraceToString())) }
 
     fun writeContentToFile(content: String, file: File): File = file.apply { writeText(content) }
 

@@ -1,6 +1,7 @@
 package com.snapnet.util
 
 import androidx.room.Room
+import android.util.Log
 import com.snapnet.App.Companion.applicationScope
 import com.snapnet.App.Companion.context
 import com.snapnet.database.AppDatabase
@@ -125,7 +126,7 @@ object DatabaseUtil {
                     types = setOf(BackupType.CommandTemplate, BackupType.CommandShortcut),
                 )
             }
-            .onFailure { it.printStackTrace() }
+            .onFailure { Log.w(TAG, Redactor.redactUrls(it.stackTraceToString())) }
         return 0
     }
 

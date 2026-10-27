@@ -81,6 +81,29 @@ class RedactorTest {
     }
 
     @Test
+    fun `redacts common cloud signed url credentials`() {
+        val out =
+            Redactor.redact(
+                "https://cdn.example/file?AWSAccessKeyId=aws-secret&Expires=12345&Signature=sig-secret&Key-Pair-Id=pair-secret"
+            )
+
+        assertFalse(out.contains("aws-secret"))
+        assertFalse(out.contains("12345"))
+        assertFalse(out.contains("sig-secret"))
+        assertFalse(out.contains("pair-secret"))
+    }
+
+    @Test
+    fun `redacts complete URLs from logs and exports`() {
+        val out = Redactor.redactUrls("request https://private.example/path/file?token=secret")
+
+        assertTrue(out.contains("<redacted-url>"))
+        assertFalse(out.contains("private.example"))
+        assertFalse(out.contains("/path/file"))
+        assertFalse(out.contains("secret"))
+    }
+
+    @Test
     fun `redacts credentials embedded in a rejected URL`() {
         val out = Redactor.redact("https://alice:private-password@example.com/file.bin")
         assertFalse(out.contains("alice"))

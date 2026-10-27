@@ -476,6 +476,9 @@
     <string name="direct_file_type">نوع الملف: %1$s</string>
     <string name="direct_file_size">حجم الملف: %1$s</string>
     <string name="direct_file_size_unknown">غير معروف</string>
+    <string name="web_page_links_title">ملفات عُثر عليها في الصفحة</string>
+    <string name="web_page_links_description">اختر رابطًا لمعاينته؛ لن يبدأ التنزيل حتى تؤكد اختيارك.</string>
+    <string name="web_page_link_source">المصدر: %1$s</string>
     <string name="saved_urls">الروابط المحفوظة</string>
     <string name="add_new_url">إضافة رابط جديد</string>
     <string name="add_to">إضافة إلى %1$s</string>
@@ -487,7 +490,14 @@
     <string name="file_manager_empty">لا توجد ملفات في مجلدات التنزيل المحددة.</string>
     <string name="file_manager_error">تعذر فحص مجلدات التنزيل.</string>
     <string name="file_manager_free_space">المساحة المتاحة: %1$s</string>
-    <string name="file_manager_scan_limited">قُلّص المسح لحماية الأداء (حتى %1$d ملف). اختر مجلد تنزيل أضيق لإظهار الملفات ذات الصلة.</string>
+    <plurals name="file_manager_scan_limited">
+        <item quantity="zero">قُلّص المسح لحماية الأداء (حتى صفر ملفات). اختر مجلد تنزيل أضيق لإظهار الملفات ذات الصلة.</item>
+        <item quantity="one">قُلّص المسح لحماية الأداء (حتى ملف واحد). اختر مجلد تنزيل أضيق لإظهار الملفات ذات الصلة.</item>
+        <item quantity="two">قُلّص المسح لحماية الأداء (حتى %1$d ملفين). اختر مجلد تنزيل أضيق لإظهار الملفات ذات الصلة.</item>
+        <item quantity="few">قُلّص المسح لحماية الأداء (حتى %1$d ملفات). اختر مجلد تنزيل أضيق لإظهار الملفات ذات الصلة.</item>
+        <item quantity="many">قُلّص المسح لحماية الأداء (حتى %1$d ملفًا). اختر مجلد تنزيل أضيق لإظهار الملفات ذات الصلة.</item>
+        <item quantity="other">قُلّص المسح لحماية الأداء (حتى %1$d ملف). اختر مجلد تنزيل أضيق لإظهار الملفات ذات الصلة.</item>
+    </plurals>
     <string name="file_manager_location">المجلد: %1$s</string>
     <string name="file_name">اسم الملف</string>
     <string name="file_filter_all">الكل</string>

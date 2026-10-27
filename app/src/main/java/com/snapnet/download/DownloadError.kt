@@ -89,11 +89,22 @@ data class DownloadError(
             }
 
     companion object {
-        fun of(throwable: Throwable): DownloadError =
-            DownloadError(
-                kind = DownloadErrorMapper.classify(throwable.message ?: throwable.toString()),
-                technicalMessage = throwable.message ?: throwable.toString(),
-            )
+        fun of(throwable: Throwable): DownloadError {
+            val kind =
+                if (throwable is HttpStatusException) {
+                    when (throwable.statusCode) {
+                        401 -> DownloadErrorKind.LOGIN_REQUIRED
+                        403 -> DownloadErrorKind.HTTP_FORBIDDEN
+                        404, 410 -> DownloadErrorKind.VIDEO_UNAVAILABLE
+                        429 -> DownloadErrorKind.RATE_LIMITED
+                        in 500..599 -> DownloadErrorKind.NETWORK_ERROR
+                        else -> DownloadErrorKind.UNKNOWN
+                    }
+                } else {
+                    DownloadErrorMapper.classify(throwable.message ?: throwable.toString())
+                }
+            return DownloadError(kind, throwable.message ?: throwable.toString())
+        }
     }
 }
 
@@ -199,7 +210,7 @@ object DownloadErrorMapper {
                 ),
             // --- Rate limiting ---
             DownloadErrorKind.RATE_LIMITED to
-                listOf("http error 429", "too many requests", "rate limit", "try again later"),
+                listOf("http error 429", "http 429", "server returned http 429", "too many requests", "rate limit", "try again later"),
             // --- Formats ---
             DownloadErrorKind.FORMAT_UNAVAILABLE to
                 listOf(
@@ -242,6 +253,13 @@ object DownloadErrorMapper {
                     "certificate",
                     "network is unreachable",
                     "unable to connect",
+                    "server returned http 500",
+                    "server returned http 502",
+                    "server returned http 503",
+                    "server returned http 504",
+                    "bad gateway",
+                    "service unavailable",
+                    "gateway timeout",
                 ),
             DownloadErrorKind.CANCELED to listOf("canceled", "cancelled", "interrupted by user"),
         )

@@ -249,8 +249,7 @@ fun GeneralDownloadPreferences(onNavigateBack: () -> Unit, navigateToTemplate: (
                                         UpdateUtil.updateYtDlp()
                                         ytdlpVersion = YT_DLP_VERSION.getString()
                                     }
-                                    .onFailure { th ->
-                                        th.printStackTrace()
+                                    .onFailure {
                                         ToastUtil.makeToastSuspend(
                                             App.context.getString(R.string.yt_dlp_update_fail)
                                         )

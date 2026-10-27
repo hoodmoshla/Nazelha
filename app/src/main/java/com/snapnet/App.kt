@@ -43,6 +43,7 @@ import com.snapnet.util.PreferenceUtil
 import com.snapnet.util.PreferenceUtil.getBoolean
 import com.snapnet.util.PreferenceUtil.getString
 import com.snapnet.util.PreferenceUtil.updateBoolean
+import com.snapnet.util.Redactor
 import com.snapnet.util.PreferenceUtil.updateString
 import com.snapnet.util.SDCARD_URI
 import com.snapnet.util.UpdateUtil
@@ -197,13 +198,14 @@ class App : Application() {
     }
 
     private fun startCrashReportActivity(th: Throwable) {
-        th.printStackTrace()
+        val safeStackTrace = Redactor.redactUrls(th.stackTraceToString())
+        Log.e(TAG, safeStackTrace)
         startActivity(
             Intent(this, CrashReportActivity::class.java)
                 .setAction("$packageName.error_report")
                 .apply {
                     flags = Intent.FLAG_ACTIVITY_NEW_TASK
-                    putExtra("error_report", getVersionReport() + "\n" + th.stackTraceToString())
+                    putExtra("error_report", getVersionReport() + "\n" + safeStackTrace)
                 }
         )
     }

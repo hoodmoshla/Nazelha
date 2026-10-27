@@ -154,7 +154,6 @@ fun UpdatePage(onNavigateBack: () -> Unit) {
                                             isLoading = false
                                         }
                                         .onFailure {
-                                            it.printStackTrace()
                                             ToastUtil.makeToastSuspend(
                                                 context.getString(R.string.app_update_failed)
                                             )

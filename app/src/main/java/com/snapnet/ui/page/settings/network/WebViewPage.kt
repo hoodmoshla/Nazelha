@@ -1,7 +1,6 @@
 package com.snapnet.ui.page.settings.network
 
 import android.annotation.SuppressLint
-import android.util.Log
 import android.webkit.CookieManager
 import android.webkit.WebResourceRequest
 import android.webkit.WebView
@@ -30,8 +29,6 @@ import com.google.android.material.R
 import com.snapnet.util.PreferenceUtil.updateString
 import com.snapnet.util.USER_AGENT_STRING
 import com.snapnet.util.connectWithDelimiter
-
-private const val TAG = "WebViewPage"
 
 data class Cookie(
     val domain: String = "",
@@ -80,7 +77,6 @@ private fun makeCookie(url: String, cookieString: String): Cookie {
 fun WebViewPage(cookiesViewModel: CookiesViewModel, onDismissRequest: () -> Unit) {
 
     val state by cookiesViewModel.stateFlow.collectAsStateWithLifecycle()
-    Log.d(TAG, state.editingCookieProfile.url)
 
     val cookieManager = CookieManager.getInstance()
     val cookieSet = remember { mutableSetOf<Cookie>() }

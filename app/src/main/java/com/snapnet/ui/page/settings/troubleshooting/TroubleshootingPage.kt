@@ -127,8 +127,7 @@ fun TroubleShootingPage(
                                     UpdateUtil.updateYtDlp()
                                     ytdlpVersion = YT_DLP_VERSION.getString()
                                 }
-                                .onFailure { th ->
-                                    th.printStackTrace()
+                                .onFailure {
                                     withContext(Dispatchers.Main) {
                                         context.makeToast(
                                             App.context.getString(R.string.yt_dlp_update_fail)

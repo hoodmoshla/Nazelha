@@ -71,7 +71,6 @@ fun AppUpdater() {
                         showUpdateDialog = true
                     }
                 }
-                .onFailure { it.printStackTrace() }
         }
     }
 
@@ -97,7 +96,6 @@ fun AppUpdater() {
                                 }
                             }
                             .onFailure {
-                                it.printStackTrace()
                                 currentDownloadStatus = UpdateUtil.DownloadStatus.NotYet
                                 ToastUtil.makeToastSuspend(
                                     context.getString(R.string.app_update_failed)

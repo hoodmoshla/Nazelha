@@ -1,6 +1,7 @@
 package com.snapnet.download.http
 
 import com.snapnet.download.DownloadStoragePolicy
+import com.snapnet.download.HttpStatusException
 import java.io.DataInputStream
 import java.io.DataOutputStream
 import java.io.File
@@ -28,6 +29,7 @@ class DirectHttpDownloader(private val client: OkHttpClient = DirectHttpClientPr
      * Returns the final partial-file length. On failure, already-written bytes remain resumable
      * when the GET response supplied a safe validator.
      */
+    @Suppress("UsableSpace") // Conservative: do not count cache bytes Android may reclaim.
     @Throws(IOException::class, CancellationException::class)
     fun download(
         taskId: String,
@@ -83,8 +85,7 @@ class DirectHttpDownloader(private val client: OkHttpClient = DirectHttpClientPr
                             throw IOException("Server rejected the requested resume range")
                         }
                     } else {
-                        if (result.code !in 200..299)
-                            throw IOException("Server returned HTTP ${result.code}")
+                        if (result.code !in 200..299) throw HttpStatusException(result.code)
 
                         val append = result.code == 206
                         val responseRangeStart = parseContentRangeStart(result.header("Content-Range"))

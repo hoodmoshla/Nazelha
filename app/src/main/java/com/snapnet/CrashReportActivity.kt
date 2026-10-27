@@ -29,12 +29,13 @@ import com.snapnet.ui.common.LocalDarkTheme
 import com.snapnet.ui.common.SettingsProvider
 import com.snapnet.ui.component.FilledButtonWithIcon
 import com.snapnet.ui.theme.SealTheme
+import com.snapnet.util.Redactor
 
 class CrashReportActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        val errorMessage: String = intent.getStringExtra("error_report").toString()
+        val errorMessage = Redactor.redactUrls(intent.getStringExtra("error_report"))
 
         setContent {
             SettingsProvider(WindowWidthSizeClass.Compact) {

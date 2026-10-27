@@ -8,6 +8,7 @@ import java.util.concurrent.ExecutionException
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicInteger
 import okhttp3.CookieJar
 import okhttp3.OkHttpClient
 import org.junit.After
@@ -102,6 +103,51 @@ class DirectHttpTransferTest {
         }
 
         assertNull(resolver.resolve(server.url("/article")))
+    }
+
+    @Test
+    fun htmlPageLinksAreListedWithoutFetchingTheCandidate() {
+        val html = "<a href='/files/manual.pdf?token=secret'>Manual</a>".toByteArray()
+        val candidateRequests = AtomicInteger()
+        server.createContext("/page") { request, output ->
+            server.respond(
+                output,
+                200,
+                headers = mapOf("Content-Type" to "text/html; charset=utf-8"),
+                body = if (request.method == "GET") html else byteArrayOf(),
+                contentLength = html.size.toLong(),
+            )
+        }
+        server.createContext("/files/manual.pdf") { _, output ->
+            candidateRequests.incrementAndGet()
+            server.respond(output, 200, headers = mapOf("Content-Type" to "application/pdf"))
+        }
+
+        val page = server.url("/page")
+        assertNull(resolver.resolve(page))
+        val candidates = resolver.discoverPageDownloads(page, "safe-page-id")
+
+        assertEquals(1, candidates.size)
+        assertEquals("Manual", candidates.single().label)
+        assertTrue(candidates.single().url.contains("token=secret"))
+        assertEquals(0, candidateRequests.get())
+    }
+
+    @Test
+    fun htmlResponseWithFileExtensionIsNotMisclassifiedAsDownload() {
+        val getRequests = AtomicInteger()
+        server.createContext("/fake.pdf") { request, output ->
+            if (request.method == "GET") getRequests.incrementAndGet()
+            server.respond(
+                output,
+                200,
+                headers = mapOf("Content-Type" to "text/html; charset=utf-8"),
+                body = "<html>login page</html>".toByteArray(),
+            )
+        }
+
+        assertNull(resolver.resolve(server.url("/fake.pdf")))
+        assertEquals(0, getRequests.get())
     }
 
     @Test

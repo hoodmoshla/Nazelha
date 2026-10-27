@@ -799,7 +799,7 @@ object DownloadUtil {
                     addOption("-o", outputBuilder.append(output).toString())
 
                     // The built command can contain cookie paths and headers; never log it raw.
-                    for (s in request.buildCommand()) Log.d(TAG, Redactor.redact(s))
+                    for (s in request.buildCommand()) Log.d(TAG, Redactor.redactUrls(s))
                 }
                 .runCatching {
                     YoutubeDL.getInstance()
@@ -823,7 +823,7 @@ object DownloadUtil {
                             th.message?.contains("Unable to communicate with SponsorBlock API") ==
                                 true
                     ) {
-                        th.printStackTrace()
+                        Log.w(TAG, Redactor.redactUrls(th.stackTraceToString()))
                         onFinishDownloading(
                             preferences = this,
                             videoInfo = videoInfo,
@@ -992,7 +992,7 @@ object DownloadUtil {
                     onTaskEnded(template, url, response.out + "\n" + response.err)
                 }
                 .onFailure {
-                    it.printStackTrace()
+                    Log.e(TAG, Redactor.redactUrls(it.stackTraceToString()))
                     if (it is YoutubeDL.CanceledException) return@onFailure
                     it.message.run {
                         if (isNullOrEmpty()) onTaskEnded(template, url)

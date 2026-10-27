@@ -30,7 +30,7 @@ android {
         applicationId = "com.snapnet.preview"
         minSdk = 24
         targetSdk = 35
-        versionCode = 100_050_400
+        versionCode = 100_060_400
         check(versionCode == currentVersionCode)
 
         versionName = baseVersionName
@@ -171,6 +171,7 @@ dependencies {
     ksp(libs.room.compiler)
 
     implementation(libs.okhttp)
+    implementation(libs.jsoup)
 
     implementation(libs.bundles.youtubedlAndroid)
 

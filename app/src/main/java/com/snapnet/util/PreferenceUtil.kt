@@ -1,6 +1,7 @@
 package com.snapnet.util
 
 import android.os.Build
+import android.util.Log
 import androidx.annotation.DeprecatedSinceApi
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.Composable
@@ -14,6 +15,8 @@ import com.snapnet.App.Companion.isFDroidBuild
 import com.snapnet.R
 import com.snapnet.database.objects.CommandTemplate
 import com.snapnet.download.Task
+import com.snapnet.download.safeDownloadTitle
+import com.snapnet.download.withOpaqueId
 import com.snapnet.ui.theme.DEFAULT_SEED_COLOR
 import com.snapnet.util.PreferenceUtil.getInt
 import com.kyant.monet.PaletteStyle
@@ -246,6 +249,9 @@ fun String.getStringDefault() = StringPreferenceDefaults.getOrElse(this) { "" }
 
 object PreferenceUtil {
     private val kv: MMKV = MMKV.defaultMMKV()
+    // Task URLs can carry short-lived signed credentials; keep the resumable queue in an
+    // independently excluded MMKV file rather than in the ordinary app-preferences backup.
+    private val taskKv: MMKV = MMKV.mmkvWithID("download_tasks")
     private val json = Json {
         ignoreUnknownKeys = true
         allowStructuredMapKeys = true
@@ -441,14 +447,37 @@ object PreferenceUtil {
 
     fun encodeTaskListBackup(map: Map<Task, Task.State>) =
         runCatching { json.encodeToString<Map<Task, Task.State>>(map) }
-            .onSuccess { kv.encode(TASK_LIST, it) }
-            .onFailure { it.printStackTrace() }
+            .onSuccess {
+                if (taskKv.encode(TASK_LIST, it)) kv.removeValueForKey(TASK_LIST)
+            }
+            .onFailure { Log.w(TAG, Redactor.redactUrls(it.stackTraceToString())) }
 
     fun decodeTaskListBackup(): Map<Task, Task.State> =
         runCatching {
-                kv.decodeString(TASK_LIST)?.let { json.decodeFromString<Map<Task, Task.State>>(it) }
+                val current = taskKv.decodeString(TASK_LIST)
+                val legacy = kv.decodeString(TASK_LIST)
+                val payload = current ?: legacy
+                val decoded = payload?.let { json.decodeFromString<Map<Task, Task.State>>(it) }
+                migrateTaskListPayload(
+                    currentPayload = current,
+                    legacyPayload = legacy,
+                    persistCurrent = { taskKv.encode(TASK_LIST, it) },
+                    clearLegacy = { kv.removeValueForKey(TASK_LIST) },
+                )
+                decoded?.map { (task, state) ->
+                    val title = state.viewState.title
+                    val safeState =
+                        if (title.startsWith("http://", ignoreCase = true) ||
+                            title.startsWith("https://", ignoreCase = true)
+                        ) {
+                            state.copy(viewState = state.viewState.copy(title = safeDownloadTitle(title)))
+                        } else {
+                            state
+                    }
+                    task.withOpaqueId() to safeState
+                }?.toMap()
             }
-            .onFailure { it.printStackTrace() }
+            .onFailure { Log.w(TAG, Redactor.redactUrls(it.stackTraceToString())) }
             .getOrNull() ?: emptyMap()
 
     fun getSavedLinks(): Set<String> = kv.decodeStringSet(SAVED_LINKS) ?: emptySet()

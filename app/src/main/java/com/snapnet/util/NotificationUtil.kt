@@ -283,7 +283,7 @@ object NotificationUtil {
             Intent()
                 .setClass(context, NotificationActionReceiver::class.java)
                 .putExtra(NOTIFICATION_ID_KEY, notificationId)
-                .putExtra(ERROR_REPORT_KEY, Redactor.redact(report))
+                .putExtra(ERROR_REPORT_KEY, Redactor.redactUrls(report))
                 .putExtra(ACTION_KEY, ACTION_ERROR_REPORT)
 
         val pendingIntent =

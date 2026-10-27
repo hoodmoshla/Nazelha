@@ -132,7 +132,6 @@ object UpdateUtil {
                     startActivity(intent)
                 }
                 .onFailure { throwable: Throwable ->
-                    throwable.printStackTrace()
                     ToastUtil.makeToast(R.string.app_update_failed)
                 }
         }
@@ -183,11 +182,11 @@ object UpdateUtil {
             val request = Request.Builder().url(targetUrl).build()
             try {
                 val response = client.newCall(request).execute()
-                val responseBody = response.body
-                return@withContext responseBody.downloadFileWithProgress(context.getLatestApk())
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
+            val responseBody = response.body
+            return@withContext responseBody.downloadFileWithProgress(context.getLatestApk())
+        } catch (e: Exception) {
+            Log.w(TAG, "App update download failed (${e.javaClass.simpleName})")
+        }
             emptyFlow()
         }
 

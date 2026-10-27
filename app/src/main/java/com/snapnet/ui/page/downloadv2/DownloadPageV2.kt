@@ -150,7 +150,7 @@ internal fun downloadErrorMessageRes(throwable: Throwable): Int =
 
 /** Redacts credential-shaped text and every URL query value before details leave the error UI. */
 internal fun redactDownloadErrorDetails(text: String): String =
-    Redactor.redact(text).replace(URL_QUERY_PARAMETER) { match ->
+    Redactor.redactUrls(text).replace(URL_QUERY_PARAMETER) { match ->
         match.groupValues[1] + Redactor.MASK
     }
 

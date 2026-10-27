@@ -18,6 +18,7 @@ import com.snapnet.util.NotificationUtil
 import com.snapnet.util.PlaylistEntry
 import com.snapnet.util.PlaylistResult
 import com.snapnet.util.PreferenceUtil.getString
+import com.snapnet.util.Redactor
 import com.snapnet.util.ToastUtil
 import com.snapnet.util.VideoInfo
 import com.snapnet.util.toHttpsUrl
@@ -108,7 +109,7 @@ object Downloader {
         }
 
         fun onCopyLog(clipboardManager: ClipboardManager) {
-            clipboardManager.setText(AnnotatedString(output))
+            clipboardManager.setText(AnnotatedString(Redactor.redactUrls(output)))
         }
 
         fun onRestart() {
@@ -123,7 +124,7 @@ object Downloader {
         }
 
         fun onCopyError(clipboardManager: ClipboardManager) {
-            clipboardManager.setText(AnnotatedString(currentLine))
+            clipboardManager.setText(AnnotatedString(Redactor.redactUrls(currentLine)))
             ToastUtil.makeToast(R.string.error_copied)
         }
 
@@ -284,11 +285,15 @@ object Downloader {
     }
 
     private fun fetchInfoError(url: String, errorReport: String) {
-        mutableErrorState.update { ErrorState.FetchInfoError(url, errorReport) }
+        mutableErrorState.update {
+            ErrorState.FetchInfoError(Redactor.redactUrl(url), Redactor.redactUrls(errorReport))
+        }
     }
 
     private fun downloadError(url: String, errorReport: String) {
-        mutableErrorState.update { ErrorState.DownloadError(url, errorReport) }
+        mutableErrorState.update {
+            ErrorState.DownloadError(Redactor.redactUrl(url), Redactor.redactUrls(errorReport))
+        }
     }
 
     private fun clearProgressState(isFinished: Boolean) {
@@ -432,7 +437,7 @@ object Downloader {
                 downloadPreferences = preferences,
                 taskId = videoInfo.id + preferences.hashCode(),
             ) { progress, _, line ->
-                Log.d(TAG, line)
+                Log.d(TAG, Redactor.redactUrls(line))
                 mutableTaskState.update { it.copy(progress = progress, progressText = line) }
                 NotificationUtil.notifyProgress(
                     notificationId = notificationId,
@@ -571,12 +576,12 @@ object Downloader {
         notificationId: Int? = null,
     ) {
         if (th is YoutubeDL.CanceledException) return
-        th.printStackTrace()
+        Log.e(TAG, Redactor.redactUrls(th.stackTraceToString()))
         val resId =
             if (isFetchingInfo) R.string.fetch_info_error_msg else R.string.download_error_msg
         ToastUtil.makeToastSuspend(context.getString(resId))
 
-        val notificationTitle = title ?: url
+        val notificationTitle = Redactor.redactUrls(title ?: url)
 
         if (isFetchingInfo) {
             fetchInfoError(url = url.toString(), errorReport = th.message.toString())

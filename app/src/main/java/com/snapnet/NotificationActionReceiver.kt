@@ -78,7 +78,7 @@ class NotificationActionReceiver : BroadcastReceiver(), KoinComponent {
                 if (!taskId.isNullOrEmpty()) {
                     val resumed = downloader.restart(taskId) || Downloader.resumeDownload(taskId)
                     if (resumed) NotificationUtil.cancelNotification(notificationId)
-                    Log.d(TAG, "resume($taskId) -> $resumed")
+                    Log.d(TAG, "resume request accepted=$resumed")
                 }
             }
 
@@ -95,7 +95,7 @@ class NotificationActionReceiver : BroadcastReceiver(), KoinComponent {
         val legacyRes = if (res) false else Downloader.cancelDownload(taskId)
         NotificationUtil.cancelNotification(notificationId)
         if (res || legacyRes) {
-            Log.d(TAG, "Task (id:$taskId) was killed.")
+            Log.d(TAG, "Task cancellation completed")
         } else {
             // todo: reserved for custom commands
             YoutubeDL.destroyProcessById(taskId)

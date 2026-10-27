@@ -8,6 +8,8 @@ import com.snapnet.util.DownloadUtil
 import com.snapnet.util.Format
 import com.snapnet.util.VideoInfo
 import com.snapnet.util.toHttpsUrl
+import java.security.MessageDigest
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import kotlinx.coroutines.Job
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.Transient
@@ -22,8 +24,24 @@ private val TypeInfo.id: String
             TypeInfo.URL -> ""
         }
 
-private fun makeId(url: String, type: TypeInfo, preferences: DownloadUtil.DownloadPreferences): String =
-    "${url}_${type.id}_${preferences.hashCode()}"
+private const val OPAQUE_TASK_ID_PREFIX = "task-v2-"
+
+private fun makeId(url: String, type: TypeInfo, preferences: DownloadUtil.DownloadPreferences): String {
+    val input = "$url\u0000${type.id}\u0000${preferences.hashCode()}"
+    val digest = MessageDigest.getInstance("SHA-256").digest(input.toByteArray(Charsets.UTF_8))
+    return OPAQUE_TASK_ID_PREFIX + digest.joinToString("") {
+        (it.toInt() and 0xff).toString(16).padStart(2, '0')
+    }
+}
+
+/** Convert identifiers written by older preview builds, which contained full source URLs. */
+internal fun Task.withOpaqueId(): Task =
+    if (id.startsWith(OPAQUE_TASK_ID_PREFIX)) this
+    else copy(id = makeId(url, type, preferences))
+
+/** A notification-safe default title while metadata is still being fetched. */
+internal fun safeDownloadTitle(url: String): String =
+    url.toHttpUrlOrNull()?.host?.take(120) ?: "Download"
 
 @Serializable
 data class Task(

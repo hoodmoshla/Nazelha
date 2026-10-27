@@ -58,6 +58,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
@@ -281,7 +282,11 @@ fun FileManagerPage(
             if (scanTruncated) {
                 item {
                     Text(
-                        stringResource(R.string.file_manager_scan_limited, MAX_SCANNED_FILES),
+                        pluralStringResource(
+                            R.plurals.file_manager_scan_limited,
+                            MAX_SCANNED_FILES,
+                            MAX_SCANNED_FILES,
+                        ),
                         modifier = Modifier.padding(horizontal = 16.dp),
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )

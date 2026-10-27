@@ -129,6 +129,9 @@
     <string name="direct_file_type">File type: %1$s</string>
     <string name="direct_file_size">File size: %1$s</string>
     <string name="direct_file_size_unknown">Unknown</string>
+    <string name="web_page_links_title">Files found on this page</string>
+    <string name="web_page_links_description">Choose a link to preview it. Nothing is downloaded until you confirm.</string>
+    <string name="web_page_link_source">Source: %1$s</string>
     <string name="concurrent_download">Multi-threaded download</string>
     <string name="concurrent_download_desc">Download more parts of M3U8/MPD videos in parallel</string>
     <string name="concurrent_download_num">%d thread(s) would be used to download DASH/HLS native video concurrently.</string>
@@ -479,7 +482,10 @@
     <string name="file_manager_empty">No files were found in the configured download folders.</string>
     <string name="file_manager_error">Could not scan the download folders.</string>
     <string name="file_manager_free_space">Free space: %1$s</string>
-    <string name="file_manager_scan_limited">Scanning was limited for performance (up to %1$d files). Choose a narrower download folder to see more relevant files.</string>
+    <plurals name="file_manager_scan_limited">
+        <item quantity="one">Scanning was limited for performance (up to %1$d file). Choose a narrower download folder to see more relevant files.</item>
+        <item quantity="other">Scanning was limited for performance (up to %1$d files). Choose a narrower download folder to see more relevant files.</item>
+    </plurals>
     <string name="file_manager_location">Folder: %1$s</string>
     <string name="file_name">File name</string>
     <string name="file_filter_all">All</string>
