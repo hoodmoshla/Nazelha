@@ -221,6 +221,49 @@ jobs:
           name: Nazelha-preview-arm64-debug
           path: release-assets
 
+      - name: Flatten and verify APK for release
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t apks < <(find release-assets -type f -name '*.apk' -print)
+          test "${#apks[@]}" -eq 1
+          source_apk="${apks[0]}"
+          source_checksum="${source_apk}.sha256"
+          test -s "$source_checksum"
+          expected_sha="$(awk 'NR == 1 { print $1 }' "$source_checksum")"
+          actual_sha="$(sha256sum "$source_apk" | awk 'NR == 1 { print $1 }')"
+          test "$expected_sha" = "$actual_sha"
+          test -s release-assets/apk-size-profile.json
+          test -s release-assets/apk-verification.txt
+          grep -q "Verified using v2 scheme (APK Signature Scheme v2): true" release-assets/apk-verification.txt
+          grep -q "package: name='com.snapnet.preview.debug'" release-assets/apk-verification.txt
+          grep -q "versionCode='100070402' versionName='1.0.7-debug'" release-assets/apk-verification.txt
+          grep -q "application-label:'نزّلها — فيديو وملفات'" release-assets/apk-verification.txt
+          python3 - "$source_apk" release-assets/apk-size-profile.json <<'PY'
+          import hashlib, json, os, sys
+          apk, report_path = sys.argv[1:]
+          with open(report_path, encoding='utf-8') as f:
+              report = json.load(f)
+          digest = hashlib.sha256()
+          with open(apk, 'rb') as f:
+              for chunk in iter(lambda: f.read(1024 * 1024), b''):
+                  digest.update(chunk)
+          assert report['apk'] == os.path.basename(apk)
+          assert report['apk_bytes'] == os.path.getsize(apk)
+          assert report['sha256'] == digest.hexdigest()
+          assert report['abi'] == ['arm64-v8a']
+          PY
+          apk_name="$(basename "$source_apk")"
+          release_apk="release-assets/$apk_name"
+          if [[ "$source_apk" != "$release_apk" ]]; then
+            cp -- "$source_apk" "$release_apk"
+          fi
+          (
+            cd release-assets
+            sha256sum "$apk_name" > "$apk_name.sha256"
+            sha256sum -c "$apk_name.sha256"
+          )
+
       - name: Publish verified prerelease
         uses: softprops/action-gh-release@v2
         with:
