@@ -171,6 +171,16 @@ jobs:
       - name: Set up Android SDK
         uses: android-actions/setup-android@v4
 
+      - name: Grant the ephemeral runner access to KVM
+        run: |
+          if [ ! -c /dev/kvm ]; then
+            echo "KVM device is unavailable on this Linux runner" >&2
+            exit 1
+          fi
+          sudo chown "$(id -un)" /dev/kvm
+          test -r /dev/kvm && test -w /dev/kvm
+          stat -c '/dev/kvm owner=%U group=%G mode=%a' /dev/kvm
+
       - name: Run Android instrumentation tests on API 35
         timeout-minutes: 25
         uses: reactivecircus/android-emulator-runner@v2
@@ -181,6 +191,7 @@ jobs:
           profile: pixel_2
           emulator-options: -no-window -no-audio -no-boot-anim -gpu swiftshader_indirect -no-snapshot -no-metrics
           disable-animations: true
+          disable-linux-hw-accel: false
           script: >-
             ./gradlew
             :app:connectedGithubPreviewDebugAndroidTest
