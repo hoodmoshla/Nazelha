@@ -28,7 +28,9 @@ import com.snapnet.util.DownloadUtil
 import com.snapnet.util.FileNaming
 import com.snapnet.util.FileUtil
 import com.snapnet.util.NotificationUtil
+import com.snapnet.util.MAX_PARALLEL_DOWNLOADS
 import com.snapnet.util.PreferenceUtil
+import com.snapnet.util.PreferenceUtil.getInt
 import com.snapnet.util.VideoInfo
 import com.snapnet.util.resolvedFileSizeBytes
 import com.yausername.youtubedl_android.YoutubeDL
@@ -53,7 +55,6 @@ import java.util.UUID
 
 private const val TAG = "DownloaderV2"
 
-private const val MAX_CONCURRENCY = 3
 private const val PROGRESS_UPDATE_BYTES = 256L * 1024L
 
 interface DownloaderV2 {
@@ -261,7 +262,12 @@ class DownloaderV2Impl(private val appContext: Context) : DownloaderV2, KoinComp
 
     /** Processes pending tasks, prioritizing downloads. */
     private fun doYourWork() {
-        if (taskStateMap.countRunning() >= MAX_CONCURRENCY) return
+        if (
+            !DownloadConcurrencyPolicy.mayStartAnother(
+                runningTasks = taskStateMap.countRunning(),
+                configuredLimit = MAX_PARALLEL_DOWNLOADS.getInt(DownloadConcurrencyPolicy.DEFAULT_LIMIT),
+            )
+        ) return
 
         taskStateMap.entries
             .sortedBy { (_, state) -> state.downloadState }
@@ -496,8 +502,14 @@ class DownloaderV2Impl(private val appContext: Context) : DownloaderV2, KoinComp
                             )
 
                         val partialDirectory = FileUtil.getExternalTempDir()
+                        // Legacy hashCode-named files have no validator/owner binding. Leave them
+                        // untouched rather than risking corruption or resuming another task's bytes.
                         val partialFile =
-                            File(partialDirectory, "direct-http-${Integer.toHexString(id.hashCode())}.part")
+                            File(partialDirectory, DirectHttpTempFileNames.partialName(id))
+                        if (!partialDirectory.exists() && !partialDirectory.mkdirs()) {
+                            throw IOException("Cannot create temporary download folder")
+                        }
+                        ensureAvailableSpace(partialDirectory, file.sizeBytes, partialFile.length())
                         var lastProgressAt = 0L
                         var lastProgressBytes = 0L
                         directHttpDownloader.download(id, file, partialFile) { downloaded, total ->
@@ -532,7 +544,9 @@ class DownloaderV2Impl(private val appContext: Context) : DownloaderV2, KoinComp
                             }
                         }
 
-                        publishDirectHttpFile(partialFile, file, id, preferences)
+                        val savedPaths = publishDirectHttpFile(partialFile, file, id, preferences)
+                        directHttpDownloader.clearResumeMetadata(partialFile)
+                        savedPaths
                     }
                     .onSuccess { savedPaths ->
                         val savedPath = savedPaths.firstOrNull()
@@ -602,7 +616,10 @@ class DownloaderV2Impl(private val appContext: Context) : DownloaderV2, KoinComp
             if (!stagingDirectory.exists() && !stagingDirectory.mkdirs()) {
                 throw IOException("Cannot create the selected SD card staging folder")
             }
-            partialFile.copyTo(File(stagingDirectory, safeName), overwrite = true)
+            val stagedFile = File(stagingDirectory, safeName)
+            if (stagedFile.exists() && !stagedFile.delete()) throw IOException("Cannot reset staging file")
+            ensureAvailableSpace(stagingDirectory, partialFile.length())
+            partialFile.copyTo(stagedFile, overwrite = true)
             val result = FileUtil.moveFilesToSdcard(stagingDirectory, preferences.sdcardUri)
             val paths = result.getOrElse { throw IOException("Could not save to the selected SD card") }
             if (paths.isEmpty()) throw IOException("The selected SD card did not accept the file")
@@ -618,6 +635,8 @@ class DownloaderV2Impl(private val appContext: Context) : DownloaderV2, KoinComp
         val extension = FileNaming.extensionOf(safeName)
         val baseName = safeName.removeSuffix(extension)
         val stagingFile = File(directory, ".${safeName}.$nameToken.partial")
+        if (stagingFile.exists() && !stagingFile.delete()) throw IOException("Cannot reset staging file")
+        ensureAvailableSpace(directory, partialFile.length())
         partialFile.copyTo(stagingFile, overwrite = true)
 
         synchronized(outputFileLock) {
@@ -636,6 +655,12 @@ class DownloaderV2Impl(private val appContext: Context) : DownloaderV2, KoinComp
             }
         }
         throw IOException("Could not find an unused file name")
+    }
+
+    private fun ensureAvailableSpace(directory: File, totalBytes: Long?, existingBytes: Long = 0L) {
+        if (!DownloadStoragePolicy.canFit(directory.usableSpace, totalBytes, existingBytes)) {
+            throw IOException("No space left on device for this download")
+        }
     }
 
     private fun formatBytes(bytes: Long): String {

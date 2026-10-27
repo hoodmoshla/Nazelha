@@ -78,6 +78,7 @@ import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.PermissionStatus
 import com.google.accompanist.permissions.rememberPermissionState
 import com.snapnet.App
+import com.snapnet.download.DownloadConcurrencyPolicy
 import com.snapnet.R
 import com.snapnet.ui.common.booleanState
 import com.snapnet.ui.component.BackButton
@@ -85,6 +86,7 @@ import com.snapnet.ui.component.ConfirmButton
 import com.snapnet.ui.component.DismissButton
 import com.snapnet.ui.component.PreferenceInfo
 import com.snapnet.ui.component.PreferenceItem
+import com.snapnet.ui.component.PreferenceSingleChoiceItem
 import com.snapnet.ui.component.PreferenceSubtitle
 import com.snapnet.ui.component.PreferenceSwitch
 import com.snapnet.ui.component.PreferenceSwitchWithDivider
@@ -97,12 +99,15 @@ import com.snapnet.util.DOWNLOAD_ARCHIVE
 import com.snapnet.util.FileUtil.getArchiveFile
 import com.snapnet.util.NOTIFICATION
 import com.snapnet.util.NotificationUtil
+import com.snapnet.util.MAX_PARALLEL_DOWNLOADS
 import com.snapnet.util.PLAYLIST
 import com.snapnet.util.PRIVATE_MODE
 import com.snapnet.util.PreferenceUtil
 import com.snapnet.util.PreferenceUtil.getBoolean
+import com.snapnet.util.PreferenceUtil.getInt
 import com.snapnet.util.PreferenceUtil.getString
 import com.snapnet.util.PreferenceUtil.updateBoolean
+import com.snapnet.util.PreferenceUtil.updateInt
 import com.snapnet.util.SPONSORBLOCK
 import com.snapnet.util.SUBTITLE
 import com.snapnet.util.THUMBNAIL
@@ -151,6 +156,13 @@ fun GeneralDownloadPreferences(onNavigateBack: () -> Unit, navigateToTemplate: (
     var downloadPlaylist by remember { mutableStateOf(PLAYLIST.getBoolean()) }
     var isSponsorBlockEnabled by remember { mutableStateOf(SPONSORBLOCK.getBoolean()) }
     var downloadNotification by remember { mutableStateOf(NOTIFICATION.getBoolean()) }
+    var maxParallelDownloads by remember {
+        androidx.compose.runtime.mutableIntStateOf(
+            MAX_PARALLEL_DOWNLOADS.getInt(DownloadConcurrencyPolicy.DEFAULT_LIMIT)
+                .coerceIn(DownloadConcurrencyPolicy.MIN_LIMIT, DownloadConcurrencyPolicy.MAX_LIMIT)
+        )
+    }
+    var showParallelDownloadsDialog by remember { mutableStateOf(false) }
 
     var isPrivateModeEnabled by remember { mutableStateOf(PRIVATE_MODE.getBoolean()) }
 
@@ -287,6 +299,16 @@ fun GeneralDownloadPreferences(onNavigateBack: () -> Unit, navigateToTemplate: (
                                 PreferenceUtil.updateValue(NOTIFICATION, downloadNotification)
                             }
                         },
+                    )
+                }
+
+                item {
+                    PreferenceItem(
+                        title = stringResource(R.string.max_parallel_downloads),
+                        description =
+                            stringResource(R.string.max_parallel_downloads_desc, maxParallelDownloads),
+                        icon = Icons.Outlined.Settings,
+                        onClick = { showParallelDownloadsDialog = true },
                     )
                 }
 
@@ -431,6 +453,35 @@ fun GeneralDownloadPreferences(onNavigateBack: () -> Unit, navigateToTemplate: (
     }
     if (showYtdlpDialog) {
         YtdlpUpdateChannelDialog(onDismissRequest = { showYtdlpDialog = false })
+    }
+    if (showParallelDownloadsDialog) {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { showParallelDownloadsDialog = false },
+            title = { Text(stringResource(R.string.max_parallel_downloads_dialog_title)) },
+            text = {
+                Column {
+                    (DownloadConcurrencyPolicy.MIN_LIMIT..DownloadConcurrencyPolicy.MAX_LIMIT)
+                        .forEach { limit ->
+                            PreferenceSingleChoiceItem(
+                                text = stringResource(R.string.parallel_download_option, limit),
+                                selected = maxParallelDownloads == limit,
+                                onClick = {
+                                    maxParallelDownloads = limit
+                                    MAX_PARALLEL_DOWNLOADS.updateInt(limit)
+                                    showParallelDownloadsDialog = false
+                                },
+                            )
+                        }
+                }
+            },
+            confirmButton = {
+                androidx.compose.material3.TextButton(
+                    onClick = { showParallelDownloadsDialog = false }
+                ) {
+                    Text(stringResource(R.string.cancel))
+                }
+            },
+        )
     }
     if (showClearArchiveDialog) {
         DownloadArchiveDialog(

@@ -214,6 +214,212 @@ class DirectHttpTransferTest {
     }
 
     @Test
+    fun refreshedMetadataDoesNotReplaceValidatorBoundToInterruptedBytes() {
+        val bytes = ByteArray(64 * 1024) { (it % 233).toByte() }
+        val firstRequest = AtomicBoolean(true)
+        server.createContext("/refreshed-validator.bin") { request, output ->
+            val range = request.header("Range")
+            if (range == null && firstRequest.compareAndSet(true, false)) {
+                server.respond(
+                    output,
+                    200,
+                    headers = mapOf("ETag" to "\"v1\""),
+                    contentLength = bytes.size.toLong(),
+                ) { body ->
+                    body.write(bytes, 0, 8192)
+                    body.flush()
+                }
+            } else {
+                assertEquals("bytes=8192-", range)
+                assertEquals("\"v1\"", request.header("If-Range"))
+                val offset = range!!.substringAfter("bytes=").removeSuffix("-").toInt()
+                server.respond(
+                    output,
+                    206,
+                    headers =
+                        mapOf(
+                            "ETag" to "\"v1\"",
+                            "Content-Range" to "bytes $offset-${bytes.lastIndex}/${bytes.size}",
+                        ),
+                    body = bytes.copyOfRange(offset, bytes.size),
+                )
+            }
+        }
+        val partial = File(tempDirectory, "refreshed.part")
+        val original = directFile(server.url("/refreshed-validator.bin"), etag = "\"v1\"")
+        org.junit.Assert.assertThrows(IOException::class.java) {
+            downloader.download("refreshed-task", original, partial) { _, _ -> }
+        }
+
+        // Metadata has since been re-resolved to v2; it must not be used for old v1 bytes.
+        val refreshed = original.copy(etag = "\"v2\"")
+        downloader.download("refreshed-task", refreshed, partial) { _, _ -> }
+
+        assertArrayEquals(bytes, partial.readBytes())
+    }
+
+    @Test
+    fun changed206AfterIgnoredIfRangeResetsAndRetriesFreshOnce() {
+        val oldBytes = ByteArray(48 * 1024) { 0x31 }
+        val newBytes = ByteArray(48 * 1024) { 0x62 }
+        val initial = AtomicBoolean(true)
+        val rangeRequests = java.util.concurrent.atomic.AtomicInteger()
+        val freshRequests = java.util.concurrent.atomic.AtomicInteger()
+        server.createContext("/changed-range.bin") { request, output ->
+            val range = request.header("Range")
+            if (range == null && initial.compareAndSet(true, false)) {
+                server.respond(
+                    output,
+                    200,
+                    headers = mapOf("ETag" to "\"v1\""),
+                    contentLength = oldBytes.size.toLong(),
+                ) { body ->
+                    body.write(oldBytes, 0, 8192)
+                    body.flush()
+                }
+            } else if (range != null) {
+                rangeRequests.incrementAndGet()
+                assertEquals("\"v1\"", request.header("If-Range"))
+                val offset = range.substringAfter("bytes=").removeSuffix("-").toInt()
+                // Broken server ignores If-Range and sends the v2 suffix as a 206.
+                server.respond(
+                    output,
+                    206,
+                    headers =
+                        mapOf(
+                            "ETag" to "\"v2\"",
+                            "Content-Range" to "bytes $offset-${newBytes.lastIndex}/${newBytes.size}",
+                        ),
+                    body = newBytes.copyOfRange(offset, newBytes.size),
+                )
+            } else {
+                freshRequests.incrementAndGet()
+                server.respond(
+                    output,
+                    200,
+                    headers = mapOf("ETag" to "\"v2\""),
+                    body = newBytes,
+                )
+            }
+        }
+        val partial = File(tempDirectory, "changed-range.part")
+        val info = directFile(server.url("/changed-range.bin"), etag = "\"v1\"")
+        org.junit.Assert.assertThrows(IOException::class.java) {
+            downloader.download("changed-range-task", info, partial) { _, _ -> }
+        }
+
+        downloader.download("changed-range-task", info, partial) { _, _ -> }
+
+        assertEquals(1, rangeRequests.get())
+        assertEquals(1, freshRequests.get())
+        assertArrayEquals(newBytes, partial.readBytes())
+    }
+
+    @Test
+    fun legacyPartialWithoutSidecarIsNeverAppended() {
+        val oldBytes = ByteArray(4096) { 0x11 }
+        val replacement = ByteArray(8192) { 0x22 }
+        val partial = File(tempDirectory, "unbound.part")
+        partial.writeBytes(oldBytes)
+        server.createContext("/unbound.bin") { request, output ->
+            assertNull("Unbound legacy bytes must not be resumed", request.header("Range"))
+            server.respond(output, 200, headers = mapOf("ETag" to "\"new\""), body = replacement)
+        }
+
+        downloader.download(
+            "unbound-task",
+            directFile(server.url("/unbound.bin"), etag = "\"new\""),
+            partial,
+        ) { _, _ -> }
+
+        assertArrayEquals(replacement, partial.readBytes())
+    }
+
+    @Test
+    fun weakEtagFallsBackToLastModifiedForIfRange() {
+        val bytes = ByteArray(40 * 1024) { (it % 197).toByte() }
+        val firstRequest = AtomicBoolean(true)
+        val modified = "Wed, 21 Oct 2015 07:28:00 GMT"
+        server.createContext("/weak-etag.bin") { request, output ->
+            val range = request.header("Range")
+            val headers = mapOf("ETag" to "W/\"weak-v1\"", "Last-Modified" to modified)
+            if (range == null && firstRequest.compareAndSet(true, false)) {
+                server.respond(output, 200, headers, contentLength = bytes.size.toLong()) { body ->
+                    body.write(bytes, 0, 8192)
+                    body.flush()
+                }
+            } else {
+                assertEquals("bytes=8192-", range)
+                assertEquals(modified, request.header("If-Range"))
+                val offset = range!!.substringAfter("bytes=").removeSuffix("-").toInt()
+                server.respond(
+                    output,
+                    206,
+                    headers + ("Content-Range" to "bytes $offset-${bytes.lastIndex}/${bytes.size}"),
+                    bytes.copyOfRange(offset, bytes.size),
+                )
+            }
+        }
+        val info = directFile(server.url("/weak-etag.bin"), etag = "W/\"weak-v1\"")
+        val partial = File(tempDirectory, "weak-etag.part")
+        org.junit.Assert.assertThrows(IOException::class.java) {
+            downloader.download("weak-etag-task", info, partial) { _, _ -> }
+        }
+
+        downloader.download("weak-etag-task", info, partial) { _, _ -> }
+
+        assertArrayEquals(bytes, partial.readBytes())
+    }
+
+    @Test
+    fun lastModifiedAloneSafelyResumesInterruptedTransfer() {
+        val bytes = ByteArray(36 * 1024) { (it % 181).toByte() }
+        val firstRequest = AtomicBoolean(true)
+        val modified = "Thu, 22 Oct 2015 07:28:00 GMT"
+        server.createContext("/last-modified.bin") { request, output ->
+            val range = request.header("Range")
+            val headers = mapOf("Last-Modified" to modified)
+            if (range == null && firstRequest.compareAndSet(true, false)) {
+                server.respond(output, 200, headers, contentLength = bytes.size.toLong()) { body ->
+                    body.write(bytes, 0, 8192)
+                    body.flush()
+                }
+            } else {
+                assertEquals(modified, request.header("If-Range"))
+                val offset = range!!.substringAfter("bytes=").removeSuffix("-").toInt()
+                server.respond(
+                    output,
+                    206,
+                    headers + ("Content-Range" to "bytes $offset-${bytes.lastIndex}/${bytes.size}"),
+                    bytes.copyOfRange(offset, bytes.size),
+                )
+            }
+        }
+        val info = directFile(server.url("/last-modified.bin"))
+        val partial = File(tempDirectory, "last-modified.part")
+        org.junit.Assert.assertThrows(IOException::class.java) {
+            downloader.download("last-modified-task", info, partial) { _, _ -> }
+        }
+
+        downloader.download("last-modified-task", info, partial) { _, _ -> }
+
+        assertArrayEquals(bytes, partial.readBytes())
+        val sidecar = File(tempDirectory, ".last-modified.part.resume")
+        assertTrue("Resume metadata should be hidden beside the partial", sidecar.isFile)
+        downloader.clearResumeMetadata(partial)
+        assertFalse(sidecar.exists())
+    }
+
+    private fun directFile(url: String, etag: String? = null): DirectHttpFile =
+        DirectHttpFile(
+            downloadUrl = url,
+            fileName = "test.bin",
+            contentType = "application/octet-stream",
+            sizeBytes = null,
+            etag = etag,
+        )
+
+    @Test
     fun downloadsChunkedResponseWhenTotalSizeIsUnknown() {
         val bytes = ByteArray(4096) { (it % 239).toByte() }
         server.createContext("/chunked.bin") { _, output ->
@@ -301,10 +507,12 @@ class DirectHttpTransferTest {
 
     @Test
     fun publicGithubRawFileCanBeResolvedAndDownloaded() {
-        assumeTrue(System.getenv("SNAPNET_LIVE_HTTP_TESTS") == "1")
+        assumeTrue(System.getenv("NAZELHA_LIVE_HTTP_TESTS") == "1")
         val file =
             DirectHttpLinkResolver()
-                .resolve("https://raw.githubusercontent.com/hoodmoshla/SnapNet/v1.0.5/README.md")
+                .resolve(
+                    "https://github.com/hoodmoshla/Nazelha/blob/feature/direct-http-downloads-stage1-2026-10-27/README.md"
+                )
         assertNotNull(file)
         val resolved = file!!
         assertEquals("README.md", resolved.fileName)

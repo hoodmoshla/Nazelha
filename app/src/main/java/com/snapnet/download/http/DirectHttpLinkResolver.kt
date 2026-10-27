@@ -25,11 +25,14 @@ class DirectHttpLinkResolver(private val client: OkHttpClient = DirectHttpClient
     /** Returns null for web pages or responses that are not recognizable as a downloadable file. */
     @Throws(IOException::class)
     fun resolve(url: String, taskKey: String? = null): DirectHttpFile? {
-        val initial = url.trim().toHttpUrlOrNull() ?: return null
-        if (initial.scheme != "http" && initial.scheme != "https") return null
-        if (initial.username.isNotEmpty() || initial.password.isNotEmpty()) {
+        val original = url.trim().toHttpUrlOrNull() ?: return null
+        if (original.scheme != "http" && original.scheme != "https") return null
+        if (original.username.isNotEmpty() || original.password.isNotEmpty()) {
             throw IOException("Credentials in URLs are not supported")
         }
+        val initial = GitHubDownloadUrlHandler.normalize(original)
+            ?: DropboxDownloadUrlHandler.normalize(original)
+            ?: original
         if (!shouldProbeHost(initial.host)) return null
         val handle = taskKey?.let { key -> WorkHandle().also { active[key] = it } }
         try {
@@ -228,45 +231,32 @@ internal object DirectHttpClientProvider {
             .build()
 }
 
-private object PublicInternetDns : Dns {
+internal object PublicInternetDns : Dns {
     override fun lookup(hostname: String): List<InetAddress> {
         val addresses = Dns.SYSTEM.lookup(hostname)
-        if (addresses.isEmpty() || addresses.any { !it.isPublicAddress() }) {
+        if (addresses.isEmpty() || addresses.any { !isPublicAddress(it) }) {
             throw UnknownHostException("Private or reserved network targets are blocked")
         }
         return addresses
     }
 
-    private fun InetAddress.isPublicAddress(): Boolean {
+    internal fun isPublicAddress(address: InetAddress): Boolean {
         if (
-            isAnyLocalAddress ||
-                isLoopbackAddress ||
-                isLinkLocalAddress ||
-                isSiteLocalAddress ||
-                isMulticastAddress
+            address.isAnyLocalAddress ||
+                address.isLoopbackAddress ||
+                address.isLinkLocalAddress ||
+                address.isSiteLocalAddress ||
+                address.isMulticastAddress
         ) {
             return false
         }
-        val bytes = address.map { it.toInt() and 0xff }
-        if (bytes.size == 4) {
-            val a = bytes[0]
-            val b = bytes[1]
-            val c = bytes[2]
-            return when {
-                a == 0 || a == 10 || a == 127 || a >= 224 -> false
-                a == 100 && b in 64..127 -> false
-                a == 169 && b == 254 -> false
-                a == 172 && b in 16..31 -> false
-                a == 192 && b == 168 -> false
-                a == 192 && b == 0 && c == 0 -> false
-                a == 192 && b == 0 && c == 2 -> false
-                a == 198 && b in 18..19 -> false
-                a == 198 && b == 51 && c == 100 -> false
-                a == 203 && b == 0 && c == 113 -> false
-                else -> true
-            }
-        }
+        val bytes = address.address.map { it.toInt() and 0xff }
+        if (bytes.size == 4) return isPublicIpv4(bytes)
         if (bytes.size == 16) {
+            val isIpv4Mapped = bytes.take(10).all { it == 0 } && bytes[10] == 0xff && bytes[11] == 0xff
+            if (isIpv4Mapped) return isPublicIpv4(bytes.drop(12))
+            if (bytes.take(12).all { it == 0 }) return false // Deprecated IPv4-compatible form.
+
             val first = bytes[0]
             val second = bytes[1]
             if (first == 0xff) return false
@@ -274,8 +264,38 @@ private object PublicInternetDns : Dns {
             if (first and 0xfe == 0xfc) return false
             if (first == 0x20 && second == 0x01 && bytes[2] == 0x0d && bytes[3] == 0xb8)
                 return false
+            if (first == 0x20 && second == 0x01 && bytes[2] == 0x00 && bytes[3] == 0x00)
+                return false // Teredo / protocol-assignment space.
+            if (first == 0x20 && second == 0x02) return false // 6to4 can encode private IPv4.
+            if (bytes[0] == 0x00 && bytes[1] == 0x64 && bytes[2] == 0xff && bytes[3] == 0x9b) {
+                return false // Well-known NAT64 prefix can encode a private IPv4 target.
+            }
+            if (first == 0x01 && bytes.drop(1).take(7).all { it == 0 }) {
+                return false // Discard-only 100::/64.
+            }
         }
         return true
+    }
+
+    private fun isPublicIpv4(bytes: List<Int>): Boolean {
+        if (bytes.size != 4) return false
+        val a = bytes[0]
+        val b = bytes[1]
+        val c = bytes[2]
+        return when {
+            a == 0 || a == 10 || a == 127 || a >= 224 -> false
+            a == 100 && b in 64..127 -> false
+            a == 169 && b == 254 -> false
+            a == 172 && b in 16..31 -> false
+            a == 192 && b == 168 -> false
+            a == 192 && b == 0 && c == 0 -> false
+            a == 192 && b == 0 && c == 2 -> false
+            a == 192 && b == 88 && c == 99 -> false
+            a == 198 && b in 18..19 -> false
+            a == 198 && b == 51 && c == 100 -> false
+            a == 203 && b == 0 && c == 113 -> false
+            else -> true
+        }
     }
 }
 
