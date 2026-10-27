@@ -34,6 +34,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Enable R8 and resource shrinking for the Debug-signed preview while retaining the current media engines and application ID.
 - Extend GitHub Actions to run API 35 instrumentation tests and publish a prerelease only after validation succeeds.
 
+### Fixed
+
+- Initialize application context and coroutine scope before preference/database objects during cold startup, preventing a process crash.
+
 ### Security
 
 - Keep HTTP(S) navigation inside WebView; block `file:`, `content:`, `javascript:`, `intent:`, and unknown external schemes. Open only `mailto:`, `tel:`, `sms:`, or `geo:` after a user gesture.

@@ -74,6 +74,8 @@ class App : Application() {
     override fun onCreate() {
         super.onCreate()
         MMKV.initialize(this)
+        context = applicationContext
+        applicationScope = CoroutineScope(SupervisorJob())
 
         if (!NAZELHA_DEFAULT_LOCALE_APPLIED.getBoolean()) {
             val hasUserLanguageChoice =
@@ -104,14 +106,12 @@ class App : Application() {
             )
         }
 
-        context = applicationContext
         packageInfo =
             packageManager.run {
                 if (Build.VERSION.SDK_INT >= 33)
                     getPackageInfo(packageName, PackageManager.PackageInfoFlags.of(0))
                 else getPackageInfo(packageName, 0)
             }
-        applicationScope = CoroutineScope(SupervisorJob())
         engineReady = CompletableDeferred()
 
         // Retry a refused foreground-service start as soon as any activity becomes visible, which is
