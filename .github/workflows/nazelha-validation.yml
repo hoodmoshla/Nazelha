@@ -192,34 +192,7 @@ jobs:
           emulator-options: -no-window -no-audio -no-boot-anim -gpu swiftshader_indirect -no-snapshot -no-metrics
           disable-animations: true
           disable-linux-hw-accel: false
-          script: |
-            set +e
-            mkdir -p android-test-diagnostics
-            timeout 15s adb devices -l > android-test-diagnostics/adb-before.txt 2>&1
-            boot_status=$(timeout 20s adb -s emulator-5554 shell getprop sys.boot_completed 2>&1 | tr -d '\r')
-            printf '%s\n' "$boot_status" | tee android-test-diagnostics/boot-status.txt
-            if [ "$boot_status" != "1" ]; then
-              timeout 20s adb logcat -d -v threadtime -t 3000 > android-test-diagnostics/logcat.txt 2>&1
-              echo "Android emulator did not report sys.boot_completed=1" >&2
-              exit 3
-            fi
-            timeout 15s adb logcat -c
-            timeout --signal=INT --kill-after=30s 15m ./gradlew \
-              :app:connectedGithubPreviewDebugAndroidTest \
-              -PnoSplits \
-              -PABI_FILTERS=x86_64 \
-              --no-daemon \
-              --no-configuration-cache \
-              "-Dorg.gradle.jvmargs=-Xmx3g -Dfile.encoding=UTF-8" \
-              --stacktrace --info --console=plain \
-              > android-test-diagnostics/gradle.log 2>&1
-            gradle_status=$?
-            printf '%s\n' "$gradle_status" > android-test-diagnostics/gradle-exit-code.txt
-            timeout 15s adb devices -l > android-test-diagnostics/adb-after.txt 2>&1
-            timeout 20s adb logcat -d -v threadtime -t 5000 > android-test-diagnostics/logcat.txt 2>&1
-            timeout 20s adb shell dumpsys activity activities > android-test-diagnostics/activities.txt 2>&1
-            tail -n 220 android-test-diagnostics/gradle.log
-            exit "$gradle_status"
+          script: bash .github/scripts/run-android-instrumentation.sh
 
       - name: Retain emulator test reports
         if: always()
