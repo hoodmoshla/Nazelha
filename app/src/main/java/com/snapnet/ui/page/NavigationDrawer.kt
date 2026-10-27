@@ -196,6 +196,16 @@ fun NavigationDrawerSheetContent(
                 selected = currentRoute == Route.DOWNLOADS,
             )
             NavigationDrawerItem(
+                label = { Text(stringResource(R.string.file_manager)) },
+                icon = { Icon(Icons.Rounded.Folder, null) },
+                onClick = {
+                    scope
+                        .launch { onDismissRequest() }
+                        .invokeOnCompletion { onNavigateToRoute(Route.FILES) }
+                },
+                selected = currentRoute == Route.FILES,
+            )
+            NavigationDrawerItem(
                 label = { Text(stringResource(R.string.custom_command)) },
                 icon = { Icon(Icons.Outlined.Terminal, null) },
                 onClick = {
@@ -359,6 +369,13 @@ fun NavigationRailContent(
             modifier = Modifier,
             selected = currentTopDestination == Route.DOWNLOADS,
             onClick = { onNavigateToRoute(Route.DOWNLOADS) },
+        )
+
+        NavigationRailItemVariant(
+            icon = { Icon(Icons.Rounded.Folder, stringResource(R.string.file_manager)) },
+            modifier = Modifier,
+            selected = currentTopDestination == Route.FILES,
+            onClick = { onNavigateToRoute(Route.FILES) },
         )
 
         NavigationRailItemVariant(

@@ -45,6 +45,7 @@ import com.snapnet.ui.page.command.TaskListPage
 import com.snapnet.ui.page.command.TaskLogPage
 import com.snapnet.ui.page.downloadv2.configure.DownloadDialogViewModel
 import com.snapnet.ui.page.downloadv2.DownloadPageV2
+import com.snapnet.ui.page.files.FileManagerPage
 import com.snapnet.ui.page.settings.SettingsPage
 import com.snapnet.ui.page.settings.about.AboutPage
 import com.snapnet.ui.page.settings.about.CreditsPage
@@ -71,7 +72,7 @@ import org.koin.androidx.compose.koinViewModel
 private const val TAG = "HomeEntry"
 
 private val TopDestinations =
-    listOf(Route.HOME, Route.TASK_LIST, Route.SETTINGS_PAGE, Route.DOWNLOADS)
+    listOf(Route.HOME, Route.TASK_LIST, Route.SETTINGS_PAGE, Route.DOWNLOADS, Route.FILES)
 
 @Composable
 fun AppEntry(dialogViewModel: DownloadDialogViewModel) {
@@ -152,6 +153,12 @@ fun AppEntry(dialogViewModel: DownloadDialogViewModel) {
                     )
                 }
                 animatedComposable(Route.DOWNLOADS) { VideoListPage { onNavigateBack() } }
+                animatedComposable(Route.FILES) {
+                    FileManagerPage(
+                        onNavigateBack = onNavigateBack,
+                        onOpenDirectorySettings = { navController.navigate(Route.DOWNLOAD_DIRECTORY) },
+                    )
+                }
                 animatedComposableVariant(Route.TASK_LIST) {
                     TaskListPage(
                         onNavigateBack = onNavigateBack,
