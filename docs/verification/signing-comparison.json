@@ -1,8 +1,10 @@
 {
   "application_id": "com.snapnet.preview.debug",
   "stage1_apk_certificate_sha256": "68462701a4a718f0a2cb94c86529258df2a870d28b5c241f8b85e58b9050acad",
-  "local_pre_review_debug_certificate_sha256": "8e2c62c2b769ec92012814e31401024042555f074894487d0efa0f183a197409",
-  "certificates_match": false,
-  "final_apk_status": "not built or distributed after final review; signing compatibility decision pending",
-  "private_key_material_included": false
+  "selected_github_actions_apk_certificate_sha256": "03813d0aca078b8e549b2ba0f0860326523c8fc62c7c2331f1cc87be2c34727a",
+  "other_local_debug_build_certificate_sha256": "8e2c62c2b769ec92012814e31401024042555f074894487d0efa0f183a197409",
+  "certificates_match_stage1": false,
+  "selected_release_candidate": "GitHub Actions artifact 12720670458 from successful run 40474102356",
+  "private_key_material_included": false,
+  "compatibility_warning": "Android will not accept the selected APK as an update over the stage-1 APK with the same application ID; no existing installation or data was removed."
 }

@@ -1,0 +1,28 @@
+{
+  "repository": "hoodmoshla/Nazelha",
+  "target_commitish": "561d47d577ea14a6010fd267dc15807923937c7c",
+  "tag_name": "nazelha-preview-v1.0.5-2026-10-27",
+  "name": "نزّلها 1.0.5 — معاينة ARM64 (Debug)",
+  "draft": false,
+  "prerelease": true,
+  "body": "## معاينة تجريبية لنزّلها\n\nهذا إصدار معاينة غير إنتاجي لتطبيق Android «نزّلها — فيديو وملفات».\n\n- الإصدار: `1.0.5-debug` (version code `100050402`).\n- معرّف الحزمة: `com.snapnet.preview.debug`.\n- المعمارية: `arm64-v8a` فقط.\n- حجم APK: `87,394,832` بايت.\n- SHA-256 لملف APK: `9e3e640a2a0f8c82557be67e5326e96a7f8a0bc0323ff1bc1e9efb565384b04f`.\n- بصمة شهادة توقيع Debug SHA-256: `03813d0aca078b8e549b2ba0f0860326523c8fc62c7c2331f1cc87be2c34727a`.\n- مصدر البناء: commit `561d47d577ea14a6010fd267dc15807923937c7c`؛ [تشغيل CI الناجح](https://github.com/hoodmoshla/Nazelha/actions/runs/40474102356).\n\n### تنبيه التثبيت\n\nهذا APK موقّع بمفتاح Debug مستقل. لا يقبله Android كتحديث فوق APK المرحلة الأولى بسبب اختلاف شهادة التوقيع، مع أن معرّف الحزمة نفسه. لا تزل النسخة القديمة أو بياناتها قبل حفظ ما تحتاجه؛ لم تُحذف نسخة أو بيانات. ليس هذا توقيعًا إنتاجيًا.\n\n### حدود معروفة\n\nGoogle Drive غير مدمج رسميًا في هذا البناء. تطبيع Dropbox مختبر، لكن تنزيل Dropbox حي لم يُثبت. لم تتوفر بيئة هاتف أو محاكي لاختبار السلوك الفعلي على Android. نجح GitHub Actions في الاختبارات وLint وبناء ARM64 والتحقق من الحزمة والاسم والتوقيع.\n\nهذا الإصدار تجريبي ويُوزع كـpre-release، وليس إصدارًا إنتاجيًا.",
+  "assets": [
+    {
+      "name": "Nazelha-1.0.5-debug.apk",
+      "size_bytes": 87394832,
+      "sha256": "9e3e640a2a0f8c82557be67e5326e96a7f8a0bc0323ff1bc1e9efb565384b04f",
+      "content_type": "application/vnd.android.package-archive"
+    },
+    {
+      "name": "Nazelha-1.0.5-debug.apk.sha256",
+      "size_bytes": 90,
+      "content_type": "text/plain",
+      "contents": "9e3e640a2a0f8c82557be67e5326e96a7f8a0bc0323ff1bc1e9efb565384b04f  Nazelha-1.0.5-debug.apk"
+    }
+  ],
+  "direct_download_url_after_publish": "https://github.com/hoodmoshla/Nazelha/releases/download/nazelha-preview-v1.0.5-2026-10-27/Nazelha-1.0.5-debug.apk",
+  "checksum_download_url_after_publish": "https://github.com/hoodmoshla/Nazelha/releases/download/nazelha-preview-v1.0.5-2026-10-27/Nazelha-1.0.5-debug.apk.sha256",
+  "created_or_published": false,
+  "confirmation_required_before_publication": true,
+  "scope_note": "Nazelha only. No tag or release is to be created in SnapNet."
+}

@@ -225,6 +225,16 @@
     "IconLauncherShape": 5,
     "IconDuplicates": 1
   },
-  "final_signed_apk_after_review": false,
-  "physical_android_test_performed": false
+  "final_signed_apk_after_review": true,
+  "physical_android_test_performed": false,
+  "github_actions": {
+    "run_id": 40474102356,
+    "head_sha": "561d47d577ea14a6010fd267dc15807923937c7c",
+    "conclusion": "success",
+    "url": "https://github.com/hoodmoshla/Nazelha/actions/runs/40474102356",
+    "artifact_id": 12720670458,
+    "artifact_name": "Nazelha-preview-arm64-debug",
+    "artifact_expires_at": "2026-11-10T08:39:21Z",
+    "selected_apk_sha256": "9e3e640a2a0f8c82557be67e5326e96a7f8a0bc0323ff1bc1e9efb565384b04f"
+  }
 }

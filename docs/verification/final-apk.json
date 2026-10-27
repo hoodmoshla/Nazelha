@@ -1,0 +1,30 @@
+{
+  "artifact_source": "GitHub Actions successful run 40474102356, artifact 12720670458",
+  "filename": "Nazelha-1.0.5-debug.apk",
+  "size_bytes": 87394832,
+  "sha256": "9e3e640a2a0f8c82557be67e5326e96a7f8a0bc0323ff1bc1e9efb565384b04f",
+  "checksum_sidecar_filename": "Nazelha-1.0.5-debug.apk.sha256",
+  "checksum_sidecar_size_bytes": 90,
+  "application_id": "com.snapnet.preview.debug",
+  "version_code": 100050402,
+  "version_name": "1.0.5-debug",
+  "application_label": "نزّلها — فيديو وملفات",
+  "native_abis": [
+    "arm64-v8a"
+  ],
+  "signature_scheme": "APK Signature Scheme v2",
+  "signer_dn": "C=US, O=Android, CN=Android Debug",
+  "signer_certificate_sha256": "03813d0aca078b8e549b2ba0f0860326523c8fc62c7c2331f1cc87be2c34727a",
+  "release_keystore_included": false,
+  "compatible_update_to_stage1_apk": false,
+  "stage1_certificate_sha256": "68462701a4a718f0a2cb94c86529258df2a870d28b5c241f8b85e58b9050acad",
+  "source_commit": "561d47d577ea14a6010fd267dc15807923937c7c",
+  "github_actions_run": "https://github.com/hoodmoshla/Nazelha/actions/runs/40474102356",
+  "github_actions_run_conclusion": "success",
+  "actions_artifact_expires_at": "2026-11-10T08:39:21Z",
+  "local_debug_build_not_selected": {
+    "sha256": "5dab435546690baf20a796b29d5b7ed149e82b5cd1c89bd6a5e37b8410504484",
+    "signer_certificate_sha256": "8e2c62c2b769ec92012814e31401024042555f074894487d0efa0f183a197409",
+    "reason": "The CI-produced artifact is selected for the release; Debug keys differ across independent builds."
+  }
+}
