@@ -290,6 +290,7 @@ class DownloaderV2Impl(private val appContext: Context) : DownloaderV2, KoinComp
         val taskInfo = task.type
         val playlistIndex = if (taskInfo is TypeInfo.Playlist) taskInfo.index else null
         val job = scope.launch(Dispatchers.Default, start = CoroutineStart.LAZY) {
+                val operationJob = coroutineContext[Job] ?: return@launch
                 App.awaitYtDlpReady()
                 App.ensureForegroundServiceReady()
                 DownloadUtil.fetchVideoInfoFromUrl(
@@ -299,14 +300,17 @@ class DownloaderV2Impl(private val appContext: Context) : DownloaderV2, KoinComp
                         taskKey = id,
                     )
                     .onSuccess {
+                        if (!task.isCurrentOperation(operationJob)) return@onSuccess
                         info = it
                         downloadState = ReadyWithInfo
                         viewState = Task.ViewState.fromVideoInfo(it)
                     }
                     .onFailure { throwable ->
-                        if (throwable is YoutubeDL.CanceledException) {
-                            return@onFailure
-                        }
+                        if (
+                            throwable is YoutubeDL.CanceledException ||
+                                throwable is CancellationException ||
+                                !task.isCurrentOperation(operationJob)
+                        ) return@onFailure
                         task.downloadState = Error(throwable = throwable, action = FetchInfo)
                         NotificationUtil.notifyError(
                             title = viewState.title,
@@ -333,11 +337,13 @@ class DownloaderV2Impl(private val appContext: Context) : DownloaderV2, KoinComp
         val task = this
         val job =
             scope.launch(Dispatchers.IO, start = CoroutineStart.LAZY) {
+                val operationJob = coroutineContext[Job] ?: return@launch
                 runCatching {
                         retryTransientDownload { directHttpResolver.resolve(url, id) }
                             ?: throw IOException("The link is not a direct HTTP file")
                     }
                     .onSuccess { file ->
+                        if (!task.isCurrentOperation(operationJob)) return@onSuccess
                         val previous = state
                         state =
                             previous.copy(
@@ -348,7 +354,10 @@ class DownloaderV2Impl(private val appContext: Context) : DownloaderV2, KoinComp
                         downloadState = ReadyWithInfo
                     }
                     .onFailure { throwable ->
-                        if (throwable is CancellationException) return@onFailure
+                        if (
+                            throwable is CancellationException ||
+                                !task.isCurrentOperation(operationJob)
+                        ) return@onFailure
                         task.downloadState = Error(throwable = throwable, action = FetchInfo)
                         NotificationUtil.notifyError(
                             title = viewState.title,
@@ -390,7 +399,9 @@ class DownloaderV2Impl(private val appContext: Context) : DownloaderV2, KoinComp
             return
         }
         check(info != null)
+        val task = this
         val job = scope.launch(Dispatchers.Default, start = CoroutineStart.LAZY) {
+                val operationJob = coroutineContext[Job] ?: return@launch
                 App.awaitYtDlpReady()
                 App.ensureForegroundServiceReady()
                 DownloadUtil.downloadVideo(
@@ -402,21 +413,24 @@ class DownloaderV2Impl(private val appContext: Context) : DownloaderV2, KoinComp
                             val progressLabel = downloadSizeLabel(text)
                             when (val preState = downloadState) {
                                 is Running -> {
-                                    downloadState =
-                                        preState.copy(progress = progress, progressText = progressLabel)
-                                    NotificationUtil.notifyProgress(
-                                        notificationId = notificationId,
-                                        progress = progressPercentage.toInt(),
-                                        text = progressLabel,
-                                        title = viewState.title,
-                                        taskId = id,
-                                    )
+                                    if (preState.job === operationJob) {
+                                        downloadState =
+                                            preState.copy(progress = progress, progressText = progressLabel)
+                                        NotificationUtil.notifyProgress(
+                                            notificationId = notificationId,
+                                            progress = progressPercentage.toInt(),
+                                            text = progressLabel,
+                                            title = viewState.title,
+                                            taskId = id,
+                                        )
+                                    }
                                 }
                                 else -> {}
                             }
                         },
                     )
                     .onSuccess { pathList ->
+                        if (!task.isCurrentOperation(operationJob)) return@onSuccess
                         downloadState = Completed(pathList.firstOrNull())
 
                         val text =
@@ -442,9 +456,11 @@ class DownloaderV2Impl(private val appContext: Context) : DownloaderV2, KoinComp
                         }
                     }
                     .onFailure { throwable ->
-                        if (throwable is YoutubeDL.CanceledException) {
-                            return@onFailure
-                        }
+                        if (
+                            throwable is YoutubeDL.CanceledException ||
+                                throwable is CancellationException ||
+                                !task.isCurrentOperation(operationJob)
+                        ) return@onFailure
                         downloadState = Error(throwable = throwable, action = Download)
                         NotificationUtil.notifyError(
                             title = viewState.title,
@@ -475,8 +491,10 @@ class DownloaderV2Impl(private val appContext: Context) : DownloaderV2, KoinComp
         val task = this
         val job =
             scope.launch(Dispatchers.IO, start = CoroutineStart.LAZY) {
+                val operationJob = coroutineContext[Job] ?: return@launch
                 runCatching {
                         App.ensureForegroundServiceReady()
+                        if (!task.isCurrentOperation(operationJob)) throw CancellationException("Download stopped")
                         val previousFile = state.directHttpFile
                         val resolvedFile = retryTransientDownload { directHttpResolver.resolve(url, id) }
                         val file = resolvedFile ?: previousFile
@@ -509,6 +527,7 @@ class DownloaderV2Impl(private val appContext: Context) : DownloaderV2, KoinComp
                                 lastProgressAt = now
                                 lastProgressBytes = downloaded
                                 val current = downloadState as? Running ?: return@progress
+                                if (current.job !== operationJob) return@progress
                                 val percentage =
                                     if (total != null && total > 0L) {
                                         (downloaded * 100L / total).toInt().coerceIn(0, 100)
@@ -534,9 +553,11 @@ class DownloaderV2Impl(private val appContext: Context) : DownloaderV2, KoinComp
                             directHttpDownloader.download(id, file, partialFile, progressCallback)
                         }
 
+                        if (!task.isCurrentOperation(operationJob)) throw CancellationException("Download stopped")
                         publishDirectHttpFile(task, partialFile, file, preferences)
                     }
                     .onSuccess { savedPaths ->
+                        if (!task.isCurrentOperation(operationJob)) return@onSuccess
                         val savedPath = savedPaths.firstOrNull()
                         if (savedPath != null && !preferences.sdcard) {
                             MediaScannerConnection.scanFile(
@@ -565,7 +586,8 @@ class DownloaderV2Impl(private val appContext: Context) : DownloaderV2, KoinComp
                     .onFailure { throwable ->
                         if (
                             throwable is CancellationException ||
-                                throwable is YoutubeDL.CanceledException
+                                throwable is YoutubeDL.CanceledException ||
+                                !task.isCurrentOperation(operationJob)
                         ) return@onFailure
                         downloadState = Error(throwable = throwable, action = Download)
                         NotificationUtil.notifyError(
@@ -865,10 +887,16 @@ class DownloaderV2Impl(private val appContext: Context) : DownloaderV2, KoinComp
         val task = this
         val pendingRestart =
             synchronized(this) {
-                val preState = downloadState as? DownloadState.Restartable ?: throw IllegalStateException()
+                val current = taskStateMap[this] ?: throw IllegalStateException()
+                val preState =
+                    current.downloadState as? DownloadState.Restartable
+                        ?: throw IllegalStateException()
                 val stoppingJob = stoppingJobs[id]
                 if (stoppingJob == null) {
-                    downloadState = restartTarget(preState)
+                    taskStateMap[this] =
+                        current.copy(
+                            downloadState = TaskRestorePolicy.restartTarget(this, current, preState)
+                        )
                     null
                 } else {
                     preState to stoppingJob
@@ -881,18 +909,15 @@ class DownloaderV2Impl(private val appContext: Context) : DownloaderV2, KoinComp
                 synchronized(task) {
                     val latest = taskStateMap[task] ?: return@synchronized
                     if (latest.downloadState == preState) {
-                        taskStateMap[task] = latest.copy(downloadState = task.restartTarget(preState))
+                        taskStateMap[task] =
+                            latest.copy(
+                                downloadState = TaskRestorePolicy.restartTarget(task, latest, preState)
+                            )
                     }
                 }
             }
         }
     }
-
-    private fun Task.restartTarget(state: DownloadState.Restartable): DownloadState =
-        when (state.action) {
-            Download -> ReadyWithInfo
-            FetchInfo -> Idle
-        }
 
     /**
      * Execute a custom command task
@@ -903,7 +928,9 @@ class DownloaderV2Impl(private val appContext: Context) : DownloaderV2, KoinComp
         check(downloadState == Idle)
         check(type is TypeInfo.CustomCommand)
         val template = type.template
+        val task = this
         val job = scope.launch(start = CoroutineStart.LAZY) {
+                val operationJob = coroutineContext[Job] ?: return@launch
                 App.awaitYtDlpReady()
                 App.ensureForegroundServiceReady()
                 DownloadUtil.executeCustomCommandTask(url, id, template, preferences) {
@@ -913,25 +940,29 @@ class DownloaderV2Impl(private val appContext: Context) : DownloaderV2, KoinComp
                         val progress = progressPercentage / 100f
                         when (val preState = downloadState) {
                             is Running -> {
-                                downloadState =
-                                    preState.copy(progress = progress, progressText = text)
-                                NotificationUtil.makeNotificationForCustomCommand(
-                                    notificationId = notificationId,
-                                    taskId = id,
-                                    progress = progressPercentage.toInt(),
-                                    templateName = template.name,
-                                    taskUrl = url,
-                                    text = text,
-                                    canPause = true,
-                                )
+                                if (preState.job === operationJob) {
+                                    downloadState =
+                                        preState.copy(progress = progress, progressText = text)
+                                    NotificationUtil.makeNotificationForCustomCommand(
+                                        notificationId = notificationId,
+                                        taskId = id,
+                                        progress = progressPercentage.toInt(),
+                                        templateName = template.name,
+                                        taskUrl = url,
+                                        text = text,
+                                        canPause = true,
+                                    )
+                                }
                             }
                             else -> {}
                         }
                     }
                     .onFailure { throwable ->
-                        if (throwable is YoutubeDL.CanceledException) {
-                            return@onFailure
-                        }
+                        if (
+                            throwable is YoutubeDL.CanceledException ||
+                                throwable is CancellationException ||
+                                !task.isCurrentOperation(operationJob)
+                        ) return@onFailure
                         downloadState = Error(throwable = throwable, action = Download)
                         NotificationUtil.notifyError(
                             title = viewState.title,
@@ -941,6 +972,7 @@ class DownloaderV2Impl(private val appContext: Context) : DownloaderV2, KoinComp
                         )
                     }
                     .onSuccess {
+                        if (!task.isCurrentOperation(operationJob)) return@onSuccess
                         downloadState = Completed(null)
 
                         val text = appContext.getString(R.string.status_completed)
@@ -968,20 +1000,18 @@ class DownloaderV2Impl(private val appContext: Context) : DownloaderV2, KoinComp
         job.start()
     }
 
+    private fun Task.isCurrentOperation(job: Job): Boolean {
+        val currentState = taskStateMap[this]?.downloadState ?: return false
+        return TaskRestorePolicy.isCurrentOperation(currentState, job)
+    }
+
     private fun Task.handleUnexpectedFailure(
         job: kotlinx.coroutines.Job,
         action: Task.RestartableAction,
         cause: Throwable,
     ) {
         if (cause is CancellationException || cause is YoutubeDL.CanceledException) return
-        val currentState = taskStateMap[this]?.downloadState ?: return
-        val jobIsStillCurrent =
-            when (currentState) {
-                is FetchingInfo -> currentState.job === job
-                is Running -> currentState.job === job
-                else -> false
-            }
-        if (!jobIsStillCurrent) return
+        if (!isCurrentOperation(job)) return
 
         downloadState = Error(throwable = cause, action = action)
         NotificationUtil.notifyError(

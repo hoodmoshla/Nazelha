@@ -25,6 +25,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.outlined.Cancel
+import androidx.compose.material.icons.outlined.DeleteOutline
 import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.Error
@@ -34,7 +35,6 @@ import androidx.compose.material.icons.rounded.RestartAlt
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material.icons.outlined.DeleteOutline
 import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -411,7 +411,11 @@ fun ListItemStateText(
     ) { downloadState ->
         val text =
             when (downloadState) {
-                is Canceled -> stringResource(R.string.status_canceled)
+                is Canceled ->
+                    stringResource(
+                        if (downloadState.paused) R.string.status_paused
+                        else R.string.status_canceled
+                    )
                 is Completed -> stringResource(R.string.status_downloaded)
                 is Error -> stringResource(downloadErrorMessageRes(downloadState.throwable))
                 is FetchingInfo -> stringResource(R.string.status_fetching_video_info)
@@ -491,7 +495,8 @@ private fun CardItemStateText(modifier: Modifier = Modifier, downloadState: Task
 
     val text =
         when (downloadState) {
-            is Canceled -> R.string.status_canceled
+            is Canceled ->
+                if (downloadState.paused) R.string.status_paused else R.string.status_canceled
             is Completed -> R.string.status_downloaded
             is Error -> R.string.status_error
             is FetchingInfo -> R.string.status_fetching_video_info

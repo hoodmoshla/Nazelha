@@ -160,6 +160,7 @@
     <string name="status_completed">انتهى</string>
     <string name="status_downloading">جارٍ التحميل</string>
     <string name="status_canceled">تم الإلغاء</string>
+    <string name="status_paused">متوقف مؤقتًا</string>
     <string name="status_fetching_video_info">جارٍ إحضار المعلومات</string>
     <string name="restart">إعادة بدء</string>
     <string name="open_file">افتح الملف</string>
