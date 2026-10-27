@@ -188,6 +188,8 @@ dependencies {
     androidTestImplementation(libs.androidx.compose.ui.test)
     androidTestImplementation(libs.androidx.test.ext)
     androidTestImplementation(libs.androidx.test.espresso.core)
+    // AndroidJUnitRunner uses Kotlin stdlib at runtime; keep it in the test APK even when R8 shrinks the app APK.
+    androidTestImplementation(libs.kotlin.stdlib)
     debugImplementation(platform(libs.androidx.compose.bom))
     debugImplementation("androidx.compose.ui:ui-test-manifest")
     implementation(libs.androidx.compose.ui.tooling)
