@@ -99,7 +99,7 @@ fun BrowserPage(
                     val uri = request.url
                     val scheme = uri.scheme?.lowercase()
                     if (scheme == "http" || scheme == "https") return false
-                    if (!isSafeExternalBrowserScheme(scheme, request.hasGesture)) return true
+                    if (!isSafeExternalBrowserScheme(scheme, request.hasGesture())) return true
                     return try {
                         context.startActivity(
                             Intent(Intent.ACTION_VIEW, uri).addCategory(Intent.CATEGORY_BROWSABLE)
