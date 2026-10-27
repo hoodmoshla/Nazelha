@@ -1,8 +1,6 @@
 @file:Suppress("UnstableApiUsage")
 
 import com.android.build.api.variant.FilterConfiguration
-import java.io.FileInputStream
-import java.util.Properties
 
 plugins {
     alias(libs.plugins.android.application)
@@ -13,8 +11,6 @@ plugins {
     alias(libs.plugins.room)
     alias(libs.plugins.ktfmt.gradle)
 }
-
-val keystorePropertiesFile: File = rootProject.file("keystore.properties")
 
 val splitApks = !project.hasProperty("noSplits")
 
@@ -28,23 +24,10 @@ val currentVersionCode = currentVersion.code.toInt()
 android {
     compileSdk = 35
 
-    if (keystorePropertiesFile.exists()) {
-        val keystoreProperties = Properties()
-        keystoreProperties.load(FileInputStream(keystorePropertiesFile))
-        signingConfigs {
-            create("githubPublish") {
-                keyAlias = keystoreProperties["keyAlias"].toString()
-                keyPassword = keystoreProperties["keyPassword"].toString()
-                storeFile = file(keystoreProperties["storeFile"]!!)
-                storePassword = keystoreProperties["storePassword"].toString()
-            }
-        }
-    }
-
     buildFeatures { buildConfig = true }
 
     defaultConfig {
-        applicationId = "com.snapnet"
+        applicationId = "com.snapnet.preview"
         minSdk = 24
         targetSdk = 35
         versionCode = 100_050_400
@@ -102,17 +85,11 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
             )
-            if (keystorePropertiesFile.exists()) {
-                signingConfig = signingConfigs.getByName("githubPublish")
-            }
         }
         debug {
-            if (keystorePropertiesFile.exists()) {
-                signingConfig = signingConfigs.getByName("githubPublish")
-            }
+            signingConfig = signingConfigs.getByName("debug")
             applicationIdSuffix = ".debug"
             versionNameSuffix = "-debug"
-            resValue("string", "app_name", "SnapNet Debug")
         }
     }
 
@@ -126,8 +103,6 @@ android {
 
         create("githubPreview") {
             dimension = "publishChannel"
-            applicationIdSuffix = ".preview"
-            resValue("string", "app_name", "SnapNet Preview")
         }
 
         create("fdroid") {
@@ -151,10 +126,10 @@ android {
                         outputImpl.filters.any { it.identifier == candidate }
                     }
             // Deliberately excludes the flavour name so the published files are predictable:
-            //   SnapNet-<version>-arm64-v8a-release.apk
+            //   Nazelha-<version>-arm64-v8a-release.apk
             outputImpl.outputFileName =
-                if (abi != null) "SnapNet-${defaultConfig.versionName}-$abi-$buildTypeName.apk"
-                else "SnapNet-${defaultConfig.versionName}-$buildTypeName.apk"
+                if (abi != null) "Nazelha-${defaultConfig.versionName}-$abi-$buildTypeName.apk"
+                else "Nazelha-${defaultConfig.versionName}-$buildTypeName.apk"
         }
     }
 

@@ -70,12 +70,12 @@ fun TroubleShootingPage(
                         modifier = Modifier,
                         text = stringResource(R.string.issue_tracker_hint),
                     )
-                    val knownIssueUrlSnapNet = "https://github.com/hoodmoshla/SnapNet/issues"
+                    val knownIssueUrlNazelha = "https://github.com/hoodmoshla/Nazelha/issues"
                     PreferenceItem(
-                        title = "SnapNet Issue Tracker",
+                        title = "متتبع مشكلات نزّلها",
                         description = null,
                         icon = Icons.AutoMirrored.Outlined.OpenInNew,
-                        onClick = { uriHandler.openUri(knownIssueUrlSnapNet) },
+                        onClick = { uriHandler.openUri(knownIssueUrlNazelha) },
                     )
 
                     val knownIssueUrlYtdlp = "https://github.com/yt-dlp/yt-dlp/issues/3766"

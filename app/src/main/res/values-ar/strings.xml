@@ -92,6 +92,12 @@
     <string name="yt_dlp_update_fail">تعذر تثبيت أحدث إصدار من yt-dlp. يرجى التحقق من اتصالك بالإنترنت.</string>
     <string name="permission_denied">تم رفض الإذن</string>
     <string name="download_error_msg">تعذر تحميل الملف</string>
+    <string name="download_error_network">تعذر الاتصال بالشبكة أو انقطع الاتصال. تحقق من اتصالك وحاول مرة أخرى.</string>
+    <string name="download_error_disk_full">لا توجد مساحة تخزين كافية لهذا التنزيل. أفرغ مساحة على جهازك ثم حاول مرة أخرى.</string>
+    <string name="download_error_auth">يتطلب الخادم مصادقة. تحقق من صلاحية الرابط ومن إمكانية الوصول المطلوبة للحساب.</string>
+    <string name="download_error_forbidden">تم رفض الوصول. قد يكون الرابط منتهي الصلاحية أو مقيّدًا؛ تحقق من صلاحيته وأذوناتك. لا يعني ذلك بالضرورة أنك بحاجة إلى تسجيل الدخول.</string>
+    <string name="download_error_unavailable">هذا المحتوى غير متاح؛ ربما أُزيل أو انتهت صلاحية الرابط.</string>
+    <string name="download_error_captcha">يتطلب الموقع اختبار CAPTCHA أو التحقق من أنك إنسان. أكمل التحقق في متصفح؛ لا يمكن لبرنامج التنزيل تجاوز ذلك.</string>
     <string name="fetch_info_error_msg">فشل جلب معلومات الفيديو</string>
     <string name="language_settings">تعيين لغة العرض</string>
     <string name="task_running">هناك مهمة تنزيل جارية بالفعل</string>
@@ -131,7 +137,7 @@
     <string name="playlist_indicator_text">جارٍ تنزيل قائمة التشغيل (%1$d/%2$d)…</string>
     <string name="download_directory_desc">حدد مكان تخزين ملفات الفيديو والصوت</string>
     <string name="cancel">إلغاء</string>
-    <string name="service_title">SnapNet يقوم بالتنزيل…</string>
+    <string name="service_title">نزّلها قيد التنزيل…</string>
     <string name="settings_before_download_desc">اضبط التفضيلات قبل التنزيل</string>
     <string name="error_copied">نُسِخَ تقرير الخطأ إلى الحافظة</string>
     <string name="edit_template_desc">سيضيف التطبيق مسار الإخراج وعنوان الرابط.</string>
@@ -285,7 +291,7 @@
     <string name="temporary_directory_desc">تخزين الملفات المؤقتة في الدليل الداخلي</string>
     <string name="sponsor">الراعي</string>
     <string name="sponsor_desc">ادعم هذا التطبيق من خلال الرعاية على GitHub</string>
-    <string name="sponsor_msg">SnapNet سيبقى دائمًا مجانيًا ومفتوح المصدر للجميع. إذا أعجبك، يُرجى التفكير في دعمي كراعياً على GitHub!</string>
+    <string name="sponsor_msg">ستبقى نزّلها مجانية ومفتوحة المصدر للجميع. إذا أعجبتك، يُرجى التفكير في دعم المشروع عبر GitHub!</string>
     <string name="feedback">التعليقات</string>
     <string name="sponsors">الرعاة</string>
     <string name="audio_format">صيغة الصوت</string>
@@ -294,7 +300,7 @@
     <string name="enable_experimental_feature">تفعيل الميزة التجريبية؟</string>
     <string name="clip_video_dialog_msg">سيتم تفويض التنزيلات باستخدام هذه الميزة إلى FFmpeg لتنزيل أقسام محددة من الفيديو، لا تزال هذه الميزة تجريبية ولن يكون القطع دقيقًا تمامًا، بالإضافة إلى ان هذه الميزة لا تدعم جميع التنسيقات وقد تواجه سرعات تنزيل أبطأ.</string>
     <string name="clip_video_desc">اصنع مقاطع فيديو في صفحة اختيار التنسيق</string>
-    <string name="auto_update_disabled_msg">التحديث التلقائي غير متاح لنسخة%1$s. إذا لم يكن لديك %1$s مثبت على جهازك، أو ترغب في معاينة الميزات الجديدة القادمة في SnapNet، يرجى التفكير في%2$s.</string>
+    <string name="auto_update_disabled_msg">التحديث التلقائي غير متاح لنسخة%1$s. إذا لم يكن لديك %1$s مثبت على جهازك، أو ترغب في معاينة الميزات الجديدة القادمة في نزّلها، يرجى التفكير في%2$s.</string>
     <string name="switch_to_github_builds">التحويل إلى إصدارات GitHub</string>
     <string name="okay">حَسَنًا</string>
     <string name="got_it">فهمت</string>
@@ -348,9 +354,9 @@
         <item quantity="many">%d عنصرًا</item>
         <item quantity="other">%d عنصر</item>
     </plurals>
-    <string name="custom_command_usage_msg">yt-dlp هي أداة سطر أوامر قوية لتنزيل مقاطع الفيديو. يجعل SnapNet استخدام yt-dlp أسهل من خلال توفير واجهة مستخدم بديهية، وإعدادات مسبقة للأوامر الشائعة، وميزات إضافية أخرى.
+    <string name="custom_command_usage_msg">yt-dlp هي أداة سطر أوامر قوية لتنزيل مقاطع الفيديو. تجعل نزّلها استخدام yt-dlp أسهل من خلال توفير واجهة مستخدم بديهية، وإعدادات مسبقة للأوامر الشائعة، وميزات إضافية أخرى.
 \n
-\nبالنسبة للاستخدام المتقدم لـ yt-dlp، يسمح لك SnapNet بإنشاء قوالب أوامر مخصصة وحفظها وتنفيذها مباشرة، تمامًا كما هو الحال في الطرفية.
+\nبالنسبة للاستخدام المتقدم لـ yt-dlp، تسمح لك نزّلها بإنشاء قوالب أوامر مخصصة وحفظها وتنفيذها مباشرة، تمامًا كما هو الحال في الطرفية.
 \n
 \nعند استخدام الأوامر المخصصة، ستتم تعطيل معظم خيارات واجهة المستخدم والميزات.</string>
     <string name="clear_download_archive">هل تريد مسح أرشيف التحميل؟</string>
@@ -462,7 +468,52 @@
     <string name="music">الموسيقى</string>
     <string name="more_formats">المزيد من الصيغ</string>
     <string name="download_notification_disabled_desc">إشعارات التطبيق معطّلة في إعدادات Android. اضغط لفتح إعدادات إشعارات التطبيق.</string>
-    <string name="dark_theme_follow_system_desc">عند اختيار «النظام»، يتبع SnapNet مظهر الجهاز وجدولته، بما في ذلك الوضع الداكن من الغروب إلى الشروق إذا كان مفعّلًا على الجهاز.</string>
+    <string name="dark_theme_follow_system_desc">عند اختيار «النظام»، تتبع نزّلها مظهر الجهاز وجدولته، بما في ذلك الوضع الداكن من الغروب إلى الشروق إذا كان مفعّلًا على الجهاز.</string>
+    <string name="pause">إيقاف مؤقت</string>
+    <string name="paused">متوقف مؤقتًا</string>
+    <string name="direct_file_preview">معاينة ملف مباشر</string>
+    <string name="direct_file_name">اسم الملف: %1$s</string>
+    <string name="direct_file_type">نوع الملف: %1$s</string>
+    <string name="direct_file_size">حجم الملف: %1$s</string>
+    <string name="direct_file_size_unknown">غير معروف</string>
+    <string name="saved_urls">الروابط المحفوظة</string>
+    <string name="add_new_url">إضافة رابط جديد</string>
+    <string name="add_to">إضافة إلى %1$s</string>
+    <string name="max_parallel_downloads">عدد التنزيلات المتزامنة</string>
+    <string name="max_parallel_downloads_desc">الحد الحالي: %1$d من 5 تنزيلات في الوقت نفسه</string>
+    <string name="max_parallel_downloads_dialog_title">اختر الحد الأقصى للتنزيلات المتزامنة</string>
+    <string name="parallel_download_option">تنزيلات في الوقت نفسه: %1$d</string>
+    <string name="file_manager">الملفات</string>
+    <string name="file_manager_empty">لا توجد ملفات في مجلدات التنزيل المحددة.</string>
+    <string name="file_manager_error">تعذر فحص مجلدات التنزيل.</string>
+    <string name="file_manager_free_space">المساحة المتاحة: %1$s</string>
+    <string name="file_manager_scan_limited">قُلّص المسح لحماية الأداء (حتى %1$d ملف). اختر مجلد تنزيل أضيق لإظهار الملفات ذات الصلة.</string>
+    <string name="file_manager_location">المجلد: %1$s</string>
+    <string name="file_name">اسم الملف</string>
+    <string name="file_filter_all">الكل</string>
+    <string name="file_type_video">مقاطع فيديو</string>
+    <string name="file_type_audio">ملفات صوتية</string>
+    <string name="file_type_image">صور</string>
+    <string name="file_type_document">مستندات</string>
+    <string name="file_type_archive">أرشيفات</string>
+    <string name="file_type_other">أخرى</string>
+    <string name="file_sort_newest">الأحدث</string>
+    <string name="file_sort_name">الاسم</string>
+    <string name="file_sort_size">الحجم</string>
+    <string name="file_manager_permission_needed">يلزم السماح بالوصول إلى الملفات</string>
+    <string name="file_manager_permission_desc">اسمح للتطبيق بإدارة الملفات لفحص الملفات المحفوظة في مجلدات التنزيل المحددة. يمكنك أيضًا اختيار مجلد من إعدادات التنزيل.</string>
+    <string name="file_manager_permission_button">السماح بالوصول إلى الملفات</string>
+    <string name="file_action_open">فتح</string>
+    <string name="file_action_share">مشاركة</string>
+    <string name="file_action_rename">إعادة التسمية</string>
+    <string name="file_action_delete">حذف</string>
+    <string name="file_rename_title">إعادة تسمية الملف</string>
+    <string name="file_delete_title">حذف الملف؟</string>
+    <string name="file_delete_confirmation">هل تريد حذف %1$s؟ لا يمكن التراجع عن ذلك.</string>
+    <string name="file_open_error">تعذر فتح الملف أو مشاركته.</string>
+    <string name="file_operation_error">تعذر تعديل الملف.</string>
+    <string name="file_status_complete">محفوظ</string>
+    <string name="refresh">تحديث</string>
     <string name="advanced_download_options">خيارات متقدمة</string>
     <string name="download_now">تنزيل الآن</string>
     <string name="selected_quality_size">%1$s · %2$s</string>

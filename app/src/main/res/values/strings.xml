@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name" translatable="false">SnapNet</string>
+    <string name="app_name" translatable="false">نزّلها — فيديو وملفات</string>
     <string name="video_directory">Video folder</string>
     <string name="extract_audio">Save as audio</string>
     <string name="create_thumbnail">Save thumbnail</string>
@@ -15,6 +15,12 @@
     <string name="permission_denied">Permission denied</string>
     <string name="download_success_msg">Download finished</string>
     <string name="download_error_msg">Could not download file</string>
+    <string name="download_error_network">A network connection failed or was interrupted. Check your connection and try again.</string>
+    <string name="download_error_disk_full">There is not enough free storage for this download. Free space on your device and try again.</string>
+    <string name="download_error_auth">The server requires authorization. Check that the link and any required account access are valid.</string>
+    <string name="download_error_forbidden">Access was denied. The link may be expired or restricted; check its validity and your permissions. This does not necessarily mean you need to sign in.</string>
+    <string name="download_error_unavailable">This media is unavailable; it may have been removed or the link may have expired.</string>
+    <string name="download_error_captcha">The site requires CAPTCHA or human verification. Complete verification in a browser; the downloader cannot bypass it.</string>
     <string name="download_start_msg">Download \"%1$s\"</string>
     <string name="fetch_info_error_msg">Could not fetch video info</string>
     <string name="general_settings">General</string>
@@ -69,7 +75,7 @@
     <string name="display_settings">Dark theme, dynamic color, languages</string>
     <string name="dark_theme">Dark theme</string>
     <string name="follow_system">System</string>
-    <string name="dark_theme_follow_system_desc">When System is selected, SnapNet follows your device appearance schedule, including sunset-to-sunrise dark mode when enabled on your device.</string>
+    <string name="dark_theme_follow_system_desc">When System is selected, Nazelha follows your device appearance schedule, including sunset-to-sunrise dark mode when enabled on your device.</string>
     <string name="on">On</string>
     <string name="off">Off</string>
     <string name="pause">Pause</string>
@@ -164,7 +170,7 @@
     <string name="permission_issue_desc">Directories outside Download/ and Documents/ are not supported</string>
     <string name="battery_configuration">Battery configuration</string>
     <string name="battery_configuration_desc">Ignore battery optimization for this app to download in the background</string>
-    <string name="service_title">SnapNet is downloading…</string>
+    <string name="service_title">Nazelha is downloading…</string>
     <string name="unknown_error">Unknown error</string>
     <string name="translate">Translate</string>
     <string name="translate_desc">Help translate this app on Hosted Weblate</string>
@@ -264,7 +270,7 @@
     <string name="how_does_it_work">How does it work?</string>
     <string name="cookies_usage_msg">Downloading from some sites requires account authentication information. Click \"Generate new cookies\", enter the URL of the website and then log in with your account in the browser page, the app will generate it for you.</string>
     <string name="youtube_cookies_required">YouTube requires a signed-in cookie on this network. Open Settings → Network → Cookies, tap Generate new cookies, use https://www.youtube.com and sign in in the built-in browser, enable Use Cookies, then retry.</string>
-    <string name="custom_command_usage_msg">yt-dlp is a powerful command-line tool for downloading videos. SnapNet makes it easier to use yt-dlp by providing an intuitive GUI, presets for common commands, and other additional features.\n\nFor advanced usage of yt-dlp, SnapNet allows you to create, save and execute custom command templates directly, just like in a terminal.\n\nWhen using custom commands, most of the GUI options and features would be disabled.</string>
+    <string name="custom_command_usage_msg">yt-dlp is a powerful command-line tool for downloading videos. Nazelha makes it easier to use yt-dlp by providing an intuitive GUI, presets for common commands, and other additional features.\n\nFor advanced usage of yt-dlp, Nazelha allows you to create, save and execute custom command templates directly, just like in a terminal.\n\nWhen using custom commands, most of the GUI options and features would be disabled.</string>
     <string name="telegram_channel">Telegram channel</string>
     <string name="matrix_space">Matrix space</string>
     <string name="sdcard_directory">SD card folder</string>
@@ -327,7 +333,7 @@
     <string name="clip_video_desc">Make video clips in the format selection page</string>
     <string name="embed_thumbnail" translatable="false">Embed thumbnail</string>
     <string name="embed_thumbnail_desc" translatable="false">Embed thumbnails into videos</string>
-    <string name="auto_update_disabled_msg">Auto-update is not available for %1$s builds. If you don\'t have %1$s installed on your device, or would like to preview upcoming new features in SnapNet, please consider %2$s.</string>
+    <string name="auto_update_disabled_msg">Auto-update is not available for %1$s builds. If you don\'t have %1$s installed on your device, or would like to preview upcoming new features in Nazelha, please consider %2$s.</string>
     <string name="switch_to_github_builds">switching to GitHub builds</string>
     <string name="okay">Okay</string>
     <string name="got_it">Got it</string>
@@ -465,6 +471,41 @@
     <string name="saved_urls">Saved links</string>
     <string name="add_new_url">Add new link</string>
     <string name="add_to">Add to %1$s</string>
+    <string name="max_parallel_downloads">Simultaneous downloads</string>
+    <string name="max_parallel_downloads_desc">Current limit: %1$d of 5 downloads at a time</string>
+    <string name="max_parallel_downloads_dialog_title">Choose the simultaneous download limit</string>
+    <string name="parallel_download_option">Limit to %1$d at a time</string>
+    <string name="file_manager">Files</string>
+    <string name="file_manager_empty">No files were found in the configured download folders.</string>
+    <string name="file_manager_error">Could not scan the download folders.</string>
+    <string name="file_manager_free_space">Free space: %1$s</string>
+    <string name="file_manager_scan_limited">Scanning was limited for performance (up to %1$d files). Choose a narrower download folder to see more relevant files.</string>
+    <string name="file_manager_location">Folder: %1$s</string>
+    <string name="file_name">File name</string>
+    <string name="file_filter_all">All</string>
+    <string name="file_type_video">Videos</string>
+    <string name="file_type_audio">Audio</string>
+    <string name="file_type_image">Images</string>
+    <string name="file_type_document">Documents</string>
+    <string name="file_type_archive">Archives</string>
+    <string name="file_type_other">Other</string>
+    <string name="file_sort_newest">Newest</string>
+    <string name="file_sort_name">Name</string>
+    <string name="file_sort_size">Size</string>
+    <string name="file_manager_permission_needed">File access is needed</string>
+    <string name="file_manager_permission_desc">Allow file-management access to scan and manage files in the configured download folders. You can also choose a folder in download settings.</string>
+    <string name="file_manager_permission_button">Allow file access</string>
+    <string name="file_action_open">Open</string>
+    <string name="file_action_share">Share</string>
+    <string name="file_action_rename">Rename</string>
+    <string name="file_action_delete">Delete</string>
+    <string name="file_rename_title">Rename file</string>
+    <string name="file_delete_title">Delete file?</string>
+    <string name="file_delete_confirmation">Delete %1$s? This cannot be undone.</string>
+    <string name="file_open_error">The file could not be opened or shared.</string>
+    <string name="file_operation_error">The file could not be changed.</string>
+    <string name="file_status_complete">Saved</string>
+    <string name="refresh">Refresh</string>
     <plurals name="item_count">
         <item quantity="one">%d item</item>
         <item quantity="other">%d items</item>

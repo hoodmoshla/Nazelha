@@ -16,8 +16,10 @@ import android.content.pm.PackageManager
 import android.net.ConnectivityManager
 import android.net.Uri
 import android.os.Build
+import android.os.Environment
 import android.os.IBinder
 import android.util.Log
+import androidx.appcompat.app.AppCompatDelegate
 import androidx.core.content.ContextCompat
 import androidx.core.content.getSystemService
 import com.google.android.material.color.DynamicColors
@@ -38,7 +40,9 @@ import com.snapnet.util.FileUtil.getExternalDownloadDirectory
 import com.snapnet.util.FileUtil.getExternalPrivateDownloadDirectory
 import com.snapnet.util.NotificationUtil
 import com.snapnet.util.PreferenceUtil
+import com.snapnet.util.PreferenceUtil.getBoolean
 import com.snapnet.util.PreferenceUtil.getString
+import com.snapnet.util.PreferenceUtil.updateBoolean
 import com.snapnet.util.PreferenceUtil.updateString
 import com.snapnet.util.SDCARD_URI
 import com.snapnet.util.UpdateUtil
@@ -46,11 +50,14 @@ import com.snapnet.util.VIDEO_DIRECTORY
 import com.snapnet.util.YT_DLP_VERSION
 import com.snapnet.util.YtDlpEngine
 import com.snapnet.util.YtDlpVersion
+import com.snapnet.util.NAZELHA_DEFAULT_LOCALE_APPLIED
+import com.snapnet.util.setLanguage
 import com.tencent.mmkv.MMKV
 import com.yausername.aria2c.Aria2c
 import com.yausername.ffmpeg.FFmpeg
 import com.yausername.youtubedl_android.YoutubeDL
 import java.io.File
+import java.util.Locale
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -66,6 +73,21 @@ class App : Application() {
     override fun onCreate() {
         super.onCreate()
         MMKV.initialize(this)
+
+        if (!NAZELHA_DEFAULT_LOCALE_APPLIED.getBoolean()) {
+            val hasUserLanguageChoice =
+                if (Build.VERSION.SDK_INT >= 33) {
+                    !AppCompatDelegate.getApplicationLocales().isEmpty
+                } else {
+                    PreferenceUtil.getLocaleFromPreference() != null
+                }
+            if (!hasUserLanguageChoice) {
+                val arabic = Locale.forLanguageTag("ar")
+                PreferenceUtil.saveLocalePreference(arabic)
+                setLanguage(arabic)
+            }
+            NAZELHA_DEFAULT_LOCALE_APPLIED.updateBoolean(true)
+        }
 
         startKoin {
             androidLogger()
@@ -139,10 +161,34 @@ class App : Application() {
                 }
         }
 
-        videoDownloadDir = VIDEO_DIRECTORY.getString(getExternalDownloadDirectory().absolutePath)
+        val legacySnapNetDirectory =
+            File(
+                Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS),
+                "SnapNet",
+            ).absolutePath
+        val defaultNazelhaDirectory = getExternalDownloadDirectory().absolutePath
+        val savedVideoDirectory = VIDEO_DIRECTORY.getString()
+        videoDownloadDir =
+            when (savedVideoDirectory) {
+                legacySnapNetDirectory ->
+                    defaultNazelhaDirectory.also { VIDEO_DIRECTORY.updateString(it) }
+                "" -> defaultNazelhaDirectory
+                else -> savedVideoDirectory
+            }
 
-        audioDownloadDir = AUDIO_DIRECTORY.getString(File(videoDownloadDir, "Audio").absolutePath)
+        val defaultAudioDirectory = File(videoDownloadDir, "Audio").absolutePath
+        val savedAudioDirectory = AUDIO_DIRECTORY.getString(defaultAudioDirectory)
+        audioDownloadDir =
+            if (savedAudioDirectory == File(legacySnapNetDirectory, "Audio").absolutePath) {
+                defaultAudioDirectory.also { AUDIO_DIRECTORY.updateString(it) }
+            } else {
+                savedAudioDirectory
+            }
+
+        val savedCommandDirectory = COMMAND_DIRECTORY.getString(videoDownloadDir)
         if (!PreferenceUtil.containsKey(COMMAND_DIRECTORY)) {
+            COMMAND_DIRECTORY.updateString(videoDownloadDir)
+        } else if (savedCommandDirectory == legacySnapNetDirectory) {
             COMMAND_DIRECTORY.updateString(videoDownloadDir)
         }
         if (Build.VERSION.SDK_INT >= 26) NotificationUtil.createNotificationChannel()

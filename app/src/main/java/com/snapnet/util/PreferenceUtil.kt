@@ -105,6 +105,8 @@ const val AV1_HARDWARE_ACCELERATED = "av1_hardware_accelerated"
 const val FORCE_IPV4 = "force_ipv4"
 const val MERGE_OUTPUT_MKV = "merge_to_mkv"
 const val USE_CUSTOM_AUDIO_PRESET = "custom_audio_preset"
+const val MAX_PARALLEL_DOWNLOADS = "max_parallel_downloads"
+const val NAZELHA_DEFAULT_LOCALE_APPLIED = "nazelha_default_locale_applied"
 
 const val MERGE_MULTI_AUDIO_STREAM = "multi_audio_stream"
 
@@ -233,6 +235,7 @@ private val IntPreferenceDefaults =
         UPDATE_CHANNEL to STABLE,
         CONVERT_SUBTITLE to NOT_SPECIFIED,
         DOWNLOAD_TYPE_INITIALIZATION to USE_PREVIOUS_SELECTION,
+        MAX_PARALLEL_DOWNLOADS to 3,
         YT_DLP_UPDATE_CHANNEL to YT_DLP_STABLE,
         DOWNLOAD_TYPE to DownloadType.Video.ordinal,
     )

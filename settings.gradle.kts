@@ -16,6 +16,6 @@ dependencyResolutionManagement {
         mavenLocal()
     }
 }
-rootProject.name = "SnapNet"
+rootProject.name = "Nazelha"
 include (":app")
 include(":color")

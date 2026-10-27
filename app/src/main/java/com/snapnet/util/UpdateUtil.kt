@@ -32,7 +32,7 @@ import okhttp3.ResponseBody
 object UpdateUtil {
 
     private const val OWNER = "hoodmoshla"
-    private const val REPO = "SnapNet"
+    private const val REPO = "Nazelha"
     private const val ARM64 = "arm64-v8a"
     private const val ARM32 = "armeabi-v7a"
     private const val X86 = "x86"

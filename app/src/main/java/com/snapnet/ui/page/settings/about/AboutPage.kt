@@ -54,11 +54,11 @@ import com.snapnet.util.AUTO_UPDATE
 import com.snapnet.util.PreferenceUtil
 import com.snapnet.util.ToastUtil
 
-private const val releaseURL = "https://github.com/hoodmoshla/SnapNet/releases"
-private const val repoUrl = "https://github.com/hoodmoshla/SnapNet"
+private const val releaseURL = "https://github.com/hoodmoshla/Nazelha/releases"
+private const val repoUrl = "https://github.com/hoodmoshla/Nazelha"
 const val weblate = "https://hosted.weblate.org/engage/seal/"
 const val YtdlpRepository = "https://github.com/yt-dlp/yt-dlp"
-private const val githubIssueUrl = "https://github.com/hoodmoshla/SnapNet/issues"
+private const val githubIssueUrl = "https://github.com/hoodmoshla/Nazelha/issues"
 private const val telegramChannelUrl = "https://t.me/seal_app"
 private const val matrixSpaceUrl = "https://matrix.to/#/#seal-space:matrix.org"
 private const val TAG = "AboutPage"
@@ -211,7 +211,7 @@ fun AutoUpdateUnavailableDialog(onDismissRequest: () -> Unit = {}) {
         val startIndex = text.indexOf(hyperLinkText)
         val endIndex = startIndex + hyperLinkText.length
         addUrlAnnotation(
-            UrlAnnotation("https://github.com/hoodmoshla/SnapNet/releases/latest"),
+            UrlAnnotation("https://github.com/hoodmoshla/Nazelha/releases/latest"),
             start = startIndex,
             end = endIndex,
         )
