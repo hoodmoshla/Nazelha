@@ -36,14 +36,11 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.List
 import androidx.compose.material.icons.outlined.FileDownload
 import androidx.compose.material.icons.outlined.GridView
-import androidx.compose.material.icons.outlined.Menu
-import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -100,10 +97,12 @@ import com.snapnet.download.Task.DownloadState.FetchingInfo
 import com.snapnet.download.Task.DownloadState.Idle
 import com.snapnet.download.Task.DownloadState.ReadyWithInfo
 import com.snapnet.download.Task.DownloadState.Running
+import com.snapnet.download.http.HttpDownloadSecurityPolicy
 import com.snapnet.ui.common.HapticFeedback.slightHapticFeedback
 import com.snapnet.ui.common.LocalDarkTheme
 import com.snapnet.ui.common.LocalFixedColorRoles
 import com.snapnet.ui.common.LocalWindowWidthState
+import com.snapnet.ui.component.HttpDownloadWarningDialog
 import com.snapnet.ui.component.SealModalBottomSheet
 import com.snapnet.ui.component.SelectionGroupDefaults
 import com.snapnet.ui.component.SelectionGroupItem
@@ -174,7 +173,8 @@ enum class Filter {
         if (this == All) return true
         val state = entry.second.downloadState
         return when (this) {
-            Active -> state is FetchingInfo || state == Idle || state == ReadyWithInfo || state is Running
+            Active ->
+                state is FetchingInfo || state == Idle || state == ReadyWithInfo || state is Running
             Completed -> state is Task.DownloadState.Completed
             Stopped -> state is Error || state is Task.DownloadState.Canceled
             All -> true
@@ -216,6 +216,7 @@ fun DownloadPageV2(
     val scope = rememberCoroutineScope()
     val clipboardManager = LocalClipboardManager.current
     val uriHandler = LocalUriHandler.current
+    var pendingHttpResumeTask by remember { mutableStateOf<Task?>(null) }
 
     DownloadPageImplV2(
         modifier = modifier,
@@ -230,7 +231,23 @@ fun DownloadPageV2(
             UiAction.Cancel -> downloader.cancel(task)
             UiAction.Pause -> downloader.pause(task)
             UiAction.Delete -> downloader.remove(task)
-            UiAction.Resume -> downloader.restart(task)
+            UiAction.Resume -> {
+                if (HttpDownloadSecurityPolicy.requiresUserConfirmation(task.url)) {
+                    if (
+                        HttpDownloadSecurityPolicy.mayStartTask(
+                            task.url,
+                            isDirectHttpFile = task.type == Task.TypeInfo.DirectHttpFile,
+                            consentGranted = true,
+                        )
+                    ) {
+                        pendingHttpResumeTask = task
+                    } else {
+                        context.makeToast(R.string.http_video_extractor_unsupported)
+                    }
+                } else {
+                    downloader.restart(task)
+                }
+            }
             is UiAction.CopyErrorReport -> {
                 clipboardManager.setText(
                     AnnotatedString(
@@ -261,6 +278,17 @@ fun DownloadPageV2(
                 }
             }
         }
+    }
+
+    pendingHttpResumeTask?.let { task ->
+        HttpDownloadWarningDialog(
+            url = task.url,
+            onConfirm = {
+                downloader.restart(task, httpConsentGranted = true)
+                pendingHttpResumeTask = null
+            },
+            onDismiss = { pendingHttpResumeTask = null },
+        )
     }
 
     var preferences by remember {
@@ -708,7 +736,6 @@ fun SubHeader(
                 modifier = Modifier.size(16.dp),
             )
         }
-
     }
 }
 

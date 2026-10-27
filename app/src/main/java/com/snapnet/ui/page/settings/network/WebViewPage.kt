@@ -1,8 +1,11 @@
 package com.snapnet.ui.page.settings.network
 
 import android.annotation.SuppressLint
+import android.net.Uri
+import android.os.Build
 import android.webkit.CookieManager
 import android.webkit.WebResourceRequest
+import android.webkit.WebSettings
 import android.webkit.WebView
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -26,9 +29,11 @@ import com.google.accompanist.web.AccompanistWebViewClient
 import com.google.accompanist.web.WebView
 import com.google.accompanist.web.rememberWebViewState
 import com.google.android.material.R
+import com.snapnet.R as AppR
 import com.snapnet.util.PreferenceUtil.updateString
 import com.snapnet.util.USER_AGENT_STRING
 import com.snapnet.util.connectWithDelimiter
+import java.util.Locale
 
 data class Cookie(
     val domain: String = "",
@@ -61,6 +66,11 @@ data class Cookie(
 
 private val domainRegex = Regex("""http(s)?://(\w*(www|m|account|sso))?|/.*""")
 
+private fun String.isSecureCookieUrl(): Boolean {
+    val uri = Uri.parse(trim())
+    return uri.scheme?.lowercase(Locale.ROOT) == "https" && !uri.host.isNullOrBlank()
+}
+
 private fun String.toDomain(): String {
     return this.replace(domainRegex, "")
 }
@@ -81,7 +91,8 @@ fun WebViewPage(cookiesViewModel: CookiesViewModel, onDismissRequest: () -> Unit
     val cookieManager = CookieManager.getInstance()
     val cookieSet = remember { mutableSetOf<Cookie>() }
     val websiteUrl = state.editingCookieProfile.url
-    val webViewState = rememberWebViewState(websiteUrl)
+    val isSecureWebsiteUrl = websiteUrl.isSecureCookieUrl()
+    val webViewState = rememberWebViewState(if (isSecureWebsiteUrl) websiteUrl else "about:blank")
 
     Scaffold(
         modifier = Modifier.fillMaxSize(),
@@ -104,6 +115,13 @@ fun WebViewPage(cookiesViewModel: CookiesViewModel, onDismissRequest: () -> Unit
             )
         },
     ) { paddingValues ->
+        if (!isSecureWebsiteUrl) {
+            Text(
+                text = stringResource(id = AppR.string.cookie_profile_https_required),
+                modifier = Modifier.padding(paddingValues).fillMaxSize(),
+            )
+            return@Scaffold
+        }
         val webViewClient = remember {
             object : AccompanistWebViewClient() {
                 override fun onPageFinished(view: WebView, url: String?) {
@@ -115,7 +133,10 @@ fun WebViewPage(cookiesViewModel: CookiesViewModel, onDismissRequest: () -> Unit
                     view: WebView?,
                     request: WebResourceRequest?,
                 ): Boolean {
-                    return if (request?.url?.scheme?.contains("http") == true)
+                    val uri = request?.url ?: return true
+                    return if (
+                        uri.scheme?.lowercase(Locale.ROOT) == "https" && !uri.host.isNullOrBlank()
+                    )
                         super.shouldOverrideUrlLoading(view, request)
                     else true
                 }
@@ -131,6 +152,11 @@ fun WebViewPage(cookiesViewModel: CookiesViewModel, onDismissRequest: () -> Unit
             factory = { context ->
                 WebView(context).apply {
                     settings.run {
+                        allowFileAccess = false
+                        allowContentAccess = false
+                        mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
+                            safeBrowsingEnabled = true
                         javaScriptCanOpenWindowsAutomatically = true
                         javaScriptEnabled = true
                         domStorageEnabled = true

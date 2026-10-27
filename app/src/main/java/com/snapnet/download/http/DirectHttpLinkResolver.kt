@@ -1,5 +1,6 @@
 package com.snapnet.download.http
 
+import com.snapnet.download.HttpStatusException
 import java.io.ByteArrayOutputStream
 import java.io.IOException
 import java.net.InetAddress
@@ -10,7 +11,6 @@ import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
-import com.snapnet.download.HttpStatusException
 import okhttp3.Call
 import okhttp3.CookieJar
 import okhttp3.Dns
@@ -26,19 +26,25 @@ class DirectHttpLinkResolver(private val client: OkHttpClient = DirectHttpClient
 
     /** Returns null for web pages or responses that are not recognizable as a downloadable file. */
     @Throws(IOException::class)
-    fun resolve(url: String, taskKey: String? = null): DirectHttpFile? {
+    fun resolve(
+        url: String,
+        taskKey: String? = null,
+        shouldContinue: () -> Boolean = { true },
+    ): DirectHttpFile? {
         val original = url.trim().toHttpUrlOrNull() ?: return null
         if (original.scheme != "http" && original.scheme != "https") return null
         if (original.username.isNotEmpty() || original.password.isNotEmpty()) {
             throw IOException("Credentials in URLs are not supported")
         }
-        val initial = GitHubDownloadUrlHandler.normalize(original)
-            ?: DropboxDownloadUrlHandler.normalize(original)
-            ?: GoogleDriveDownloadUrlHandler.normalize(original)
-            ?: original
-        if (!shouldProbeHost(initial.host)) return null
+        val initial =
+            GitHubDownloadUrlHandler.normalize(original)
+                ?: DropboxDownloadUrlHandler.normalize(original)
+                ?: GoogleDriveDownloadUrlHandler.normalize(original)
+                ?: original
         val handle = taskKey?.let { key -> WorkHandle().also { active[key] = it } }
         try {
+            checkCanContinue(handle, shouldContinue)
+            if (!shouldProbeHost(initial.host)) return null
             val head = executeFollowingRedirects(initial, "HEAD", null, taskKey, handle)
             head.use { response ->
                 if (response.code == 405 || response.code == 501) {
@@ -52,7 +58,7 @@ class DirectHttpLinkResolver(private val client: OkHttpClient = DirectHttpClient
                 }
             }
 
-            checkNotCanceled(handle)
+            checkCanContinue(handle, shouldContinue)
             val probe = executeFollowingRedirects(initial, "GET", "bytes=0-0", taskKey, handle)
             probe.use { response ->
                 if (!response.isSuccessful) throw HttpStatusException(response.code)
@@ -64,8 +70,9 @@ class DirectHttpLinkResolver(private val client: OkHttpClient = DirectHttpClient
     }
 
     /**
-     * Reads one bounded HTML page and returns candidate file anchors. Candidates are only displayed;
-     * this method never fetches them, executes scripts, or forwards cookies or authorization headers.
+     * Reads one bounded HTML page and returns candidate file anchors. Candidates are only
+     * displayed; this method never fetches them, executes scripts, or forwards cookies or
+     * authorization headers.
      */
     @Throws(IOException::class)
     fun discoverPageDownloads(url: String, taskKey: String? = null): List<DiscoveredDownloadLink> {
@@ -97,14 +104,19 @@ class DirectHttpLinkResolver(private val client: OkHttpClient = DirectHttpClient
                             checkNotCanceled(handle)
                             val count = input.read(buffer)
                             if (count < 0) break
-                            if (total + count > WebPageLinkDiscovery.MAX_HTML_BYTES) return emptyList()
+                            if (total + count > WebPageLinkDiscovery.MAX_HTML_BYTES)
+                                return emptyList()
                             output.write(buffer, 0, count)
                             total += count
                         }
                         output.toByteArray()
                     }
-                val charset = body.contentType()?.charset(StandardCharsets.UTF_8) ?: StandardCharsets.UTF_8
-                return WebPageLinkDiscovery.extract(String(bytes, charset), result.request.url.toString())
+                val charset =
+                    body.contentType()?.charset(StandardCharsets.UTF_8) ?: StandardCharsets.UTF_8
+                return WebPageLinkDiscovery.extract(
+                    String(bytes, charset),
+                    result.request.url.toString(),
+                )
             }
         } finally {
             if (taskKey != null && handle != null) active.remove(taskKey, handle)
@@ -144,14 +156,8 @@ class DirectHttpLinkResolver(private val client: OkHttpClient = DirectHttpClient
                 throw IOException("Too many or invalid HTTP redirects")
             }
             val next = current.resolve(location) ?: throw IOException("Invalid HTTP redirect")
-            if (current.scheme == "https" && next.scheme != "https") {
-                throw IOException("HTTPS downgrade redirect blocked")
-            }
-            if (next.scheme != "http" && next.scheme != "https") {
-                throw IOException("Non-HTTP redirect blocked")
-            }
-            if (next.username.isNotEmpty() || next.password.isNotEmpty()) {
-                throw IOException("Credentials in redirects are not supported")
+            if (!HttpDownloadSecurityPolicy.mayFollowRedirect(current, next)) {
+                throw IOException("Unsafe HTTP redirect blocked")
             }
             current = next
         }
@@ -173,7 +179,9 @@ class DirectHttpLinkResolver(private val client: OkHttpClient = DirectHttpClient
         val html = contentType == "text/html" || contentType == "application/xhtml+xml"
 
         val recognizedAsFile =
-            isAttachment || dispositionName != null || (!html && (contentType != null || hasPathExtension))
+            isAttachment ||
+                dispositionName != null ||
+                (!html && (contentType != null || hasPathExtension))
         if (!recognizedAsFile) return null
 
         val safeName = FileNamingSupport.safeFileName(dispositionName ?: pathName, contentType)
@@ -196,12 +204,19 @@ class DirectHttpLinkResolver(private val client: OkHttpClient = DirectHttpClient
     private fun Response.looksLikeHtmlPage(): Boolean {
         val type = header("Content-Type")?.substringBefore(';')?.trim()?.lowercase(Locale.ROOT)
         val hasDownloadName = parseDispositionFileName(header("Content-Disposition")) != null
-        return (type == "text/html" || type == "application/xhtml+xml") &&
-            !hasDownloadName
+        return (type == "text/html" || type == "application/xhtml+xml") && !hasDownloadName
     }
 
     private fun checkNotCanceled(handle: WorkHandle?) {
         if (handle?.canceled?.get() == true) throw java.util.concurrent.CancellationException()
+    }
+
+    private fun checkCanContinue(handle: WorkHandle?, shouldContinue: () -> Boolean) {
+        if (!shouldContinue()) {
+            handle?.cancel()
+            throw java.util.concurrent.CancellationException("HTTP resolution canceled")
+        }
+        checkNotCanceled(handle)
     }
 
     private class WorkHandle {
@@ -304,7 +319,8 @@ internal object PublicInternetDns : Dns {
         val bytes = address.address.map { it.toInt() and 0xff }
         if (bytes.size == 4) return isPublicIpv4(bytes)
         if (bytes.size == 16) {
-            val isIpv4Mapped = bytes.take(10).all { it == 0 } && bytes[10] == 0xff && bytes[11] == 0xff
+            val isIpv4Mapped =
+                bytes.take(10).all { it == 0 } && bytes[10] == 0xff && bytes[11] == 0xff
             if (isIpv4Mapped) return isPublicIpv4(bytes.drop(12))
             if (bytes.take(12).all { it == 0 }) return false // Deprecated IPv4-compatible form.
 
@@ -322,8 +338,12 @@ internal object PublicInternetDns : Dns {
                 return false // Well-known NAT64 prefix can encode a private IPv4 target.
             }
             if (
-                bytes[0] == 0x00 && bytes[1] == 0x64 && bytes[2] == 0xff && bytes[3] == 0x9b &&
-                    bytes[4] == 0x00 && bytes[5] == 0x01
+                bytes[0] == 0x00 &&
+                    bytes[1] == 0x64 &&
+                    bytes[2] == 0xff &&
+                    bytes[3] == 0x9b &&
+                    bytes[4] == 0x00 &&
+                    bytes[5] == 0x01
             ) {
                 return false // Local-use NAT64 prefix 64:ff9b:1::/48 may encode private IPv4.
             }

@@ -135,6 +135,7 @@ fun FormatPage(
     videoInfo: VideoInfo,
     downloader: DownloaderV2 = koinInject(),
     isSharedIntent: Boolean = false,
+    httpConsentGranted: Boolean = false,
     onNavigateBack: () -> Unit = {},
 ) {
     if (videoInfo.formats.isNullOrEmpty()) return
@@ -176,7 +177,8 @@ fun FormatPage(
                     newTitle = newTitle,
                     selectedSubtitles = selectedSubtitles,
                     selectedAutoCaptions = selectedAutoCaptions,
-                )
+                ),
+                httpConsentGranted,
             )
 
             if (diffSubtitleLanguages.isNotEmpty()) {

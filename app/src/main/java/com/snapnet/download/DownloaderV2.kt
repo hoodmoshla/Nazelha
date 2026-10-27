@@ -23,6 +23,7 @@ import com.snapnet.download.Task.TypeInfo
 import com.snapnet.download.http.DirectHttpDownloader
 import com.snapnet.download.http.DirectHttpFile
 import com.snapnet.download.http.DirectHttpLinkResolver
+import com.snapnet.download.http.HttpDownloadSecurityPolicy
 import com.snapnet.util.DownloadUtil
 import com.snapnet.util.FileNaming
 import com.snapnet.util.FileUtil
@@ -60,6 +61,9 @@ private const val PROGRESS_UPDATE_BYTES = 256L * 1024L
 interface DownloaderV2 {
     fun getTaskStateMap(): SnapshotStateMap<Task, Task.State>
 
+    /** Clears temporary folders without deleting partial files owned by queued direct downloads. */
+    suspend fun clearTemporaryFiles(): Int = 0
+
     fun cancel(task: Task): Boolean
 
     /**
@@ -76,6 +80,11 @@ interface DownloaderV2 {
 
     fun restart(task: Task)
 
+    /** Resumes an HTTP task only when the UI has just shown and received explicit consent. */
+    fun restart(task: Task, httpConsentGranted: Boolean) {
+        restart(task)
+    }
+
     /** Resumes the task with [taskId]; returns false when no such task is queued. */
     fun restart(taskId: String): Boolean =
         getTaskStateMap().keys.find { it.id == taskId }?.let {
@@ -86,11 +95,24 @@ interface DownloaderV2 {
     /** Enqueue a [Task] with an empty [Task.State] */
     fun enqueue(task: Task)
 
+    fun enqueue(task: Task, httpConsentGranted: Boolean) {
+        enqueue(task)
+    }
+
     fun enqueue(task: Task, state: Task.State)
+
+    fun enqueue(task: Task, state: Task.State, httpConsentGranted: Boolean) {
+        enqueue(task, state)
+    }
 
     fun enqueue(taskWithState: TaskFactory.TaskWithState) {
         val (task, state) = taskWithState
         enqueue(task, state)
+    }
+
+    fun enqueue(taskWithState: TaskFactory.TaskWithState, httpConsentGranted: Boolean) {
+        val (task, state) = taskWithState
+        enqueue(task, state, httpConsentGranted)
     }
 
     fun remove(task: Task): Boolean
@@ -100,6 +122,8 @@ internal object FakeDownloaderV2 : DownloaderV2 {
     override fun getTaskStateMap(): SnapshotStateMap<Task, Task.State> {
         return mutableStateMapOf()
     }
+
+    override suspend fun clearTemporaryFiles(): Int = 0
 
     override fun cancel(task: Task): Boolean {
         return false
@@ -134,6 +158,8 @@ class DownloaderV2Impl(private val appContext: Context) : DownloaderV2, KoinComp
     private val outputFileLock = Any()
     private val taskStateMap = mutableStateMapOf<Task, Task.State>()
     private val stoppingJobs = ConcurrentHashMap<String, StoppingTaskJob>()
+    private val consentedHttpTaskIds = ConcurrentHashMap.newKeySet<String>()
+    private val taskRestoreComplete = CompletableDeferred<Unit>()
     private val snapshotFlow = snapshotFlow { taskStateMap.toMap() }
 
     init {
@@ -147,7 +173,13 @@ class DownloaderV2Impl(private val appContext: Context) : DownloaderV2, KoinComp
 
         scope.launch(Dispatchers.IO) {
             // don't write before we read
-            enqueueFromBackup()
+            try {
+                enqueueFromBackup()
+                taskRestoreComplete.complete(Unit)
+            } catch (failure: Throwable) {
+                taskRestoreComplete.completeExceptionally(failure)
+                throw failure
+            }
 
             snapshotFlow
                 .map { it.filter { it.value.downloadState !is Completed } }
@@ -182,13 +214,48 @@ class DownloaderV2Impl(private val appContext: Context) : DownloaderV2, KoinComp
         return taskStateMap
     }
 
-    override fun enqueue(task: Task) {
-        taskStateMap +=
-            task to Task.State(Idle, null, Task.ViewState(url = task.url, title = safeDownloadTitle(task.url)))
+    override suspend fun clearTemporaryFiles(): Int {
+        taskRestoreComplete.await()
+        return synchronized(taskStateMap) {
+            val protectedFileNames =
+                taskStateMap.keys
+                    .asSequence()
+                    .filter { it.type == TypeInfo.DirectHttpFile }
+                    .map { DirectHttpTempFileNames.partialName(it.id) }
+                    .toSet()
+            FileUtil.clearTempFiles(FileUtil.getExternalTempDir(), protectedFileNames) +
+                FileUtil.clearTempFiles(FileUtil.run { appContext.getInternalTempDir() })
+        }
     }
 
-    override fun enqueue(task: Task, state: Task.State) {
-        taskStateMap += task to state
+    override fun enqueue(task: Task) = enqueue(task, httpConsentGranted = false)
+
+    override fun enqueue(task: Task, httpConsentGranted: Boolean) {
+        enqueue(
+            task,
+            Task.State(Idle, null, Task.ViewState(url = task.url, title = safeDownloadTitle(task.url))),
+            httpConsentGranted,
+        )
+    }
+
+    override fun enqueue(task: Task, state: Task.State) =
+        enqueue(task, state, httpConsentGranted = false)
+
+    override fun enqueue(task: Task, state: Task.State, httpConsentGranted: Boolean) {
+        val isHttp = HttpDownloadSecurityPolicy.requiresUserConfirmation(task.url)
+        val mayStart =
+            HttpDownloadSecurityPolicy.mayStartTask(
+                task.url,
+                isDirectHttpFile = task.type == TypeInfo.DirectHttpFile,
+                consentGranted = httpConsentGranted,
+            )
+        if (isHttp && mayStart) {
+            consentedHttpTaskIds.add(task.id)
+        } else if (isHttp) {
+            consentedHttpTaskIds.remove(task.id)
+        }
+        val safeState = if (isHttp && !mayStart) TaskRestorePolicy.restore(task, state) else state
+        synchronized(taskStateMap) { taskStateMap += task to safeState }
     }
 
     /**
@@ -197,8 +264,13 @@ class DownloaderV2Impl(private val appContext: Context) : DownloaderV2, KoinComp
      * @return true if the task was removed
      */
     override fun remove(task: Task): Boolean {
-        val previousState = taskStateMap[task] ?: return false
-        taskStateMap.remove(task)
+        val previousState =
+            synchronized(taskStateMap) {
+                val previous = taskStateMap[task] ?: return false
+                taskStateMap.remove(task)
+                previous
+            }
+        consentedHttpTaskIds.remove(task.id)
         if (
             previousState.downloadState !is DownloadState.Cancelable &&
                 !stoppingJobs.containsKey(task.id)
@@ -208,11 +280,35 @@ class DownloaderV2Impl(private val appContext: Context) : DownloaderV2, KoinComp
         return true
     }
 
-    override fun cancel(task: Task): Boolean = task.cancelImpl()
+    override fun cancel(task: Task): Boolean {
+        consentedHttpTaskIds.remove(task.id)
+        return task.cancelImpl()
+    }
 
-    override fun pause(task: Task): Boolean = task.pauseImpl()
+    override fun pause(task: Task): Boolean {
+        consentedHttpTaskIds.remove(task.id)
+        return task.pauseImpl()
+    }
 
-    override fun restart(task: Task) {
+    override fun restart(task: Task) = restart(task, httpConsentGranted = false)
+
+    override fun restart(task: Task, httpConsentGranted: Boolean) {
+        if (HttpDownloadSecurityPolicy.requiresUserConfirmation(task.url)) {
+            val mayStart =
+                HttpDownloadSecurityPolicy.mayStartTask(
+                    task.url,
+                    isDirectHttpFile = task.type == TypeInfo.DirectHttpFile,
+                    consentGranted = httpConsentGranted,
+                )
+            if (!mayStart) {
+                consentedHttpTaskIds.remove(task.id)
+                synchronized(taskStateMap) {
+                    taskStateMap[task]?.let { taskStateMap[task] = TaskRestorePolicy.restore(task, it) }
+                }
+                return
+            }
+            consentedHttpTaskIds.add(task.id)
+        }
         task.restartImpl()
     }
 
@@ -257,8 +353,13 @@ class DownloaderV2Impl(private val appContext: Context) : DownloaderV2, KoinComp
 
         taskStateMap.entries
             .sortedBy { (_, state) -> state.downloadState }
-            .firstOrNull { (_, state) ->
-                state.downloadState == ReadyWithInfo || state.downloadState == Idle
+            .firstOrNull { (task, state) ->
+                (state.downloadState == ReadyWithInfo || state.downloadState == Idle) &&
+                    HttpDownloadSecurityPolicy.mayStartTask(
+                        task.url,
+                        isDirectHttpFile = task.type == TypeInfo.DirectHttpFile,
+                        consentGranted = task.id in consentedHttpTaskIds,
+                    )
             }
             ?.let { (task, state) ->
                 when (state.downloadState) {
@@ -300,35 +401,51 @@ class DownloaderV2Impl(private val appContext: Context) : DownloaderV2, KoinComp
                         taskKey = id,
                     )
                     .onSuccess {
-                        if (!task.isCurrentOperation(operationJob)) return@onSuccess
-                        info = it
-                        downloadState = ReadyWithInfo
-                        viewState = Task.ViewState.fromVideoInfo(it)
+                        task.updateIfCurrentOperation(
+                            operationJob,
+                            update = { current ->
+                                current.copy(
+                                    downloadState = ReadyWithInfo,
+                                    videoInfo = it,
+                                    viewState = Task.ViewState.fromVideoInfo(it),
+                                )
+                            },
+                        )
                     }
                     .onFailure { throwable ->
                         if (
                             throwable is YoutubeDL.CanceledException ||
-                                throwable is CancellationException ||
-                                !task.isCurrentOperation(operationJob)
+                                throwable is CancellationException
                         ) return@onFailure
-                        task.downloadState = Error(throwable = throwable, action = FetchInfo)
-                        NotificationUtil.notifyError(
-                            title = viewState.title,
-                            textId = R.string.download_error_msg,
-                            notificationId = notificationId,
-                            report = throwable.stackTraceToString(),
-                        )
+                        task.updateIfCurrentOperation(
+                            operationJob,
+                            update = { current ->
+                                current.copy(downloadState = Error(throwable = throwable, action = FetchInfo))
+                            },
+                        ) {
+                            NotificationUtil.notifyError(
+                                title = viewState.title,
+                                textId = R.string.download_error_msg,
+                                notificationId = notificationId,
+                                report = throwable.stackTraceToString(),
+                            )
+                        }
                     }
             }
-        downloadState = FetchingInfo(job = job, taskId = id)
+        if (!beginOperation(Idle, FetchingInfo(job = job, taskId = id)) {
+                NotificationUtil.notifyProgress(
+                    notificationId = notificationId,
+                    title = viewState.title,
+                    taskId = id,
+                )
+            }
+        ) {
+            job.cancel()
+            return
+        }
         job.invokeOnCompletion { cause ->
             if (cause != null) handleUnexpectedFailure(job, FetchInfo, cause)
         }
-        NotificationUtil.notifyProgress(
-            notificationId = notificationId,
-            title = viewState.title,
-            taskId = id,
-        )
         job.start()
     }
 
@@ -339,43 +456,59 @@ class DownloaderV2Impl(private val appContext: Context) : DownloaderV2, KoinComp
             scope.launch(Dispatchers.IO, start = CoroutineStart.LAZY) {
                 val operationJob = coroutineContext[Job] ?: return@launch
                 runCatching {
-                        retryTransientDownload { directHttpResolver.resolve(url, id) }
+                        retryTransientDownload {
+                            directHttpResolver.resolve(url, id) {
+                                operationJob.isActive && task.isCurrentOperation(operationJob)
+                            }
+                        }
                             ?: throw IOException("The link is not a direct HTTP file")
                     }
                     .onSuccess { file ->
-                        if (!task.isCurrentOperation(operationJob)) return@onSuccess
-                        val previous = state
-                        state =
-                            previous.copy(
-                                videoInfo = null,
-                                viewState = viewStateFor(url, file),
-                                directHttpFile = file,
-                            )
-                        downloadState = ReadyWithInfo
+                        task.updateIfCurrentOperation(
+                            operationJob,
+                            update = { current ->
+                                current.copy(
+                                    videoInfo = null,
+                                    downloadState = ReadyWithInfo,
+                                    directHttpFile = file,
+                                    viewState = viewStateFor(url, file),
+                                )
+                            },
+                        )
                     }
                     .onFailure { throwable ->
                         if (
-                            throwable is CancellationException ||
-                                !task.isCurrentOperation(operationJob)
+                            throwable is CancellationException
                         ) return@onFailure
-                        task.downloadState = Error(throwable = throwable, action = FetchInfo)
-                        NotificationUtil.notifyError(
-                            title = viewState.title,
-                            textId = R.string.download_error_msg,
-                            notificationId = notificationId,
-                            report = "Direct HTTP link preview failed: ${throwable::class.java.simpleName}",
-                        )
+                        task.updateIfCurrentOperation(
+                            operationJob,
+                            update = { current ->
+                                current.copy(downloadState = Error(throwable = throwable, action = FetchInfo))
+                            },
+                        ) {
+                            NotificationUtil.notifyError(
+                                title = viewState.title,
+                                textId = R.string.download_error_msg,
+                                notificationId = notificationId,
+                                report = "Direct HTTP link preview failed: ${throwable::class.java.simpleName}",
+                            )
+                        }
                     }
             }
-        downloadState = FetchingInfo(job = job, taskId = id)
+        if (!beginOperation(Idle, FetchingInfo(job = job, taskId = id)) {
+                NotificationUtil.notifyProgress(
+                    notificationId = notificationId,
+                    title = viewState.title,
+                    taskId = id,
+                )
+            }
+        ) {
+            job.cancel()
+            return
+        }
         job.invokeOnCompletion { cause ->
             if (cause != null) handleUnexpectedFailure(job, FetchInfo, cause)
         }
-        NotificationUtil.notifyProgress(
-            notificationId = notificationId,
-            title = viewState.title,
-            taskId = id,
-        )
         job.start()
     }
 
@@ -411,74 +544,93 @@ class DownloaderV2Impl(private val appContext: Context) : DownloaderV2, KoinComp
                         progressCallback = { progressPercentage, _, text ->
                             val progress = progressPercentage / 100f
                             val progressLabel = downloadSizeLabel(text)
-                            when (val preState = downloadState) {
-                                is Running -> {
-                                    if (preState.job === operationJob) {
+                            task.updateIfCurrentOperation(
+                                operationJob,
+                                update = { current ->
+                                    val running =
+                                        (current.downloadState as? Running)
+                                            ?.takeIf { it.job === operationJob }
+                                            ?: return@updateIfCurrentOperation null
+                                    current.copy(
                                         downloadState =
-                                            preState.copy(progress = progress, progressText = progressLabel)
-                                        NotificationUtil.notifyProgress(
-                                            notificationId = notificationId,
-                                            progress = progressPercentage.toInt(),
-                                            text = progressLabel,
-                                            title = viewState.title,
-                                            taskId = id,
-                                        )
-                                    }
-                                }
-                                else -> {}
+                                            running.copy(progress = progress, progressText = progressLabel)
+                                    )
+                                },
+                            ) {
+                                NotificationUtil.notifyProgress(
+                                    notificationId = notificationId,
+                                    progress = progressPercentage.toInt(),
+                                    text = progressLabel,
+                                    title = viewState.title,
+                                    taskId = id,
+                                )
                             }
                         },
                     )
                     .onSuccess { pathList ->
-                        if (!task.isCurrentOperation(operationJob)) return@onSuccess
-                        downloadState = Completed(pathList.firstOrNull())
-
-                        val text =
-                            appContext.getString(
-                                if (pathList.isEmpty()) R.string.status_completed
-                                else R.string.download_finish_notification
-                            )
-                        FileUtil.createIntentForOpeningFile(pathList.firstOrNull()).run {
-                            NotificationUtil.finishNotification(
-                                notificationId,
-                                title = viewState.title,
-                                text = text,
-                                intent =
-                                    if (this != null)
-                                        PendingIntent.getActivity(
-                                            appContext,
-                                            0,
-                                            this,
-                                            PendingIntent.FLAG_IMMUTABLE,
-                                        )
-                                    else null,
-                            )
+                        task.updateIfCurrentOperation(
+                            operationJob,
+                            update = { current ->
+                                current.copy(downloadState = Completed(pathList.firstOrNull()))
+                            },
+                        ) {
+                            val text =
+                                appContext.getString(
+                                    if (pathList.isEmpty()) R.string.status_completed
+                                    else R.string.download_finish_notification
+                                )
+                            FileUtil.createIntentForOpeningFile(pathList.firstOrNull()).run {
+                                NotificationUtil.finishNotification(
+                                    notificationId,
+                                    title = viewState.title,
+                                    text = text,
+                                    intent =
+                                        if (this != null)
+                                            PendingIntent.getActivity(
+                                                appContext,
+                                                0,
+                                                this,
+                                                PendingIntent.FLAG_IMMUTABLE,
+                                            )
+                                        else null,
+                                )
+                            }
                         }
                     }
                     .onFailure { throwable ->
                         if (
                             throwable is YoutubeDL.CanceledException ||
-                                throwable is CancellationException ||
-                                !task.isCurrentOperation(operationJob)
+                                throwable is CancellationException
                         ) return@onFailure
-                        downloadState = Error(throwable = throwable, action = Download)
-                        NotificationUtil.notifyError(
-                            title = viewState.title,
-                            textId = R.string.fetch_info_error_msg,
-                            notificationId = notificationId,
-                            report = throwable.stackTraceToString(),
-                        )
+                        task.updateIfCurrentOperation(
+                            operationJob,
+                            update = { current ->
+                                current.copy(downloadState = Error(throwable = throwable, action = Download))
+                            },
+                        ) {
+                            NotificationUtil.notifyError(
+                                title = viewState.title,
+                                textId = R.string.fetch_info_error_msg,
+                                notificationId = notificationId,
+                                report = throwable.stackTraceToString(),
+                            )
+                        }
                     }
             }
-        downloadState = Running(job = job, taskId = id)
+        if (!task.beginOperation(ReadyWithInfo, Running(job = job, taskId = id)) {
+                NotificationUtil.notifyProgress(
+                    notificationId = notificationId,
+                    title = viewState.title,
+                    taskId = id,
+                )
+            }
+        ) {
+            job.cancel()
+            return
+        }
         job.invokeOnCompletion { cause ->
             if (cause != null) handleUnexpectedFailure(job, Download, cause)
         }
-        NotificationUtil.notifyProgress(
-            notificationId = notificationId,
-            title = viewState.title,
-            taskId = id,
-        )
         job.start()
     }
 
@@ -496,15 +648,26 @@ class DownloaderV2Impl(private val appContext: Context) : DownloaderV2, KoinComp
                         App.ensureForegroundServiceReady()
                         if (!task.isCurrentOperation(operationJob)) throw CancellationException("Download stopped")
                         val previousFile = state.directHttpFile
-                        val resolvedFile = retryTransientDownload { directHttpResolver.resolve(url, id) }
+                        val resolvedFile =
+                            retryTransientDownload {
+                                directHttpResolver.resolve(url, id) {
+                                    operationJob.isActive && task.isCurrentOperation(operationJob)
+                                }
+                            }
                         val file = resolvedFile ?: previousFile
                             ?: throw IOException("The link is not a direct HTTP file")
-                        state =
-                            state.copy(
-                                directHttpFile = file,
-                                videoInfo = null,
-                                viewState = viewStateFor(url, file),
+                        if (
+                            !task.updateIfCurrentOperation(
+                                operationJob,
+                                update = { current ->
+                                    current.copy(
+                                        directHttpFile = file,
+                                        videoInfo = null,
+                                        viewState = viewStateFor(url, file),
+                                    )
+                                },
                             )
+                        ) throw CancellationException("Download stopped")
 
                         val partialDirectory = FileUtil.getExternalTempDir()
                         // Legacy hashCode-named files have no validator/owner binding. Leave them
@@ -526,8 +689,6 @@ class DownloaderV2Impl(private val appContext: Context) : DownloaderV2, KoinComp
                             ) {
                                 lastProgressAt = now
                                 lastProgressBytes = downloaded
-                                val current = downloadState as? Running ?: return@progress
-                                if (current.job !== operationJob) return@progress
                                 val percentage =
                                     if (total != null && total > 0L) {
                                         (downloaded * 100L / total).toInt().coerceIn(0, 100)
@@ -535,29 +696,48 @@ class DownloaderV2Impl(private val appContext: Context) : DownloaderV2, KoinComp
                                 val text =
                                     if (total == null) formatBytes(downloaded)
                                     else "${formatBytes(downloaded)} / ${formatBytes(total)}"
-                                downloadState =
-                                    current.copy(
-                                        progress = if (percentage < 0) -1f else percentage / 100f,
-                                        progressText = text,
+                                task.updateIfCurrentOperation(
+                                    operationJob,
+                                    update = { current ->
+                                        val running =
+                                            (current.downloadState as? Running)
+                                                ?.takeIf { it.job === operationJob }
+                                                ?: return@updateIfCurrentOperation null
+                                        current.copy(
+                                            downloadState =
+                                                running.copy(
+                                                    progress = if (percentage < 0) -1f else percentage / 100f,
+                                                    progressText = text,
+                                                )
+                                        )
+                                    },
+                                ) {
+                                    NotificationUtil.notifyProgress(
+                                        notificationId = notificationId,
+                                        progress = percentage,
+                                        text = text,
+                                        title = viewState.title,
+                                        taskId = id,
                                     )
-                                NotificationUtil.notifyProgress(
-                                    notificationId = notificationId,
-                                    progress = percentage,
-                                    text = text,
-                                    title = viewState.title,
-                                    taskId = id,
-                                )
+                                }
                             }
                         }
                         retryTransientDownload {
-                            directHttpDownloader.download(id, file, partialFile, progressCallback)
+                            directHttpDownloader.download(
+                                taskId = id,
+                                file = file,
+                                partialFile = partialFile,
+                                shouldContinue = {
+                                    operationJob.isActive && task.isCurrentOperation(operationJob)
+                                },
+                                onProgress = progressCallback,
+                            )
                         }
 
                         if (!task.isCurrentOperation(operationJob)) throw CancellationException("Download stopped")
-                        publishDirectHttpFile(task, partialFile, file, preferences)
+                        publishDirectHttpFile(task, operationJob, partialFile, file, preferences)
                     }
                     .onSuccess { savedPaths ->
-                        if (!task.isCurrentOperation(operationJob)) return@onSuccess
                         val savedPath = savedPaths.firstOrNull()
                         if (savedPath != null && !preferences.sdcard) {
                             MediaScannerConnection.scanFile(
@@ -586,32 +766,43 @@ class DownloaderV2Impl(private val appContext: Context) : DownloaderV2, KoinComp
                     .onFailure { throwable ->
                         if (
                             throwable is CancellationException ||
-                                throwable is YoutubeDL.CanceledException ||
-                                !task.isCurrentOperation(operationJob)
+                                throwable is YoutubeDL.CanceledException
                         ) return@onFailure
-                        downloadState = Error(throwable = throwable, action = Download)
-                        NotificationUtil.notifyError(
-                            title = viewState.title,
-                            textId = R.string.download_error_msg,
-                            notificationId = notificationId,
-                            report = "Direct HTTP download failed: ${throwable::class.java.simpleName}",
-                        )
+                        task.updateIfCurrentOperation(
+                            operationJob,
+                            update = { current ->
+                                current.copy(downloadState = Error(throwable = throwable, action = Download))
+                            },
+                        ) {
+                            NotificationUtil.notifyError(
+                                title = viewState.title,
+                                textId = R.string.download_error_msg,
+                                notificationId = notificationId,
+                                report = "Direct HTTP download failed: ${throwable::class.java.simpleName}",
+                            )
+                        }
                     }
             }
-        downloadState = Running(job = job, taskId = id)
+        if (!task.beginOperation(ReadyWithInfo, Running(job = job, taskId = id)) {
+                NotificationUtil.notifyProgress(
+                    notificationId = notificationId,
+                    title = viewState.title,
+                    taskId = id,
+                )
+            }
+        ) {
+            job.cancel()
+            return
+        }
         job.invokeOnCompletion { cause ->
             if (cause != null) handleUnexpectedFailure(job, Download, cause)
         }
-        NotificationUtil.notifyProgress(
-            notificationId = notificationId,
-            title = viewState.title,
-            taskId = id,
-        )
         job.start()
     }
 
     private fun publishDirectHttpFile(
         task: Task,
+        operationJob: Job,
         partialFile: File,
         file: DirectHttpFile,
         preferences: DownloadUtil.DownloadPreferences,
@@ -628,10 +819,10 @@ class DownloaderV2Impl(private val appContext: Context) : DownloaderV2, KoinComp
             val stagedFile = File(stagingDirectory, safeName)
             if (stagedFile.exists() && !stagedFile.delete()) throw IOException("Cannot reset staging file")
             ensureAvailableSpace(stagingDirectory, partialFile.length())
-            task.copyDirectHttpPartial(partialFile, stagedFile)
+            task.copyDirectHttpPartial(operationJob, partialFile, stagedFile)
             val result =
                 FileUtil.moveFilesToSdcard(stagingDirectory, preferences.sdcardUri) {
-                    task.checkDirectHttpTaskRunning()
+                    task.checkDirectHttpTaskRunning(operationJob)
                 }
             val paths =
                 result.getOrElse { failure ->
@@ -641,11 +832,15 @@ class DownloaderV2Impl(private val appContext: Context) : DownloaderV2, KoinComp
             if (paths.isEmpty()) throw IOException("The selected SD card did not accept the file")
             val committed =
                 synchronized(task) {
-                    if (taskStateMap[task]?.downloadState !is Running) {
+                    val current = taskStateMap[task]
+                    if (
+                        current == null ||
+                            !TaskRestorePolicy.isCurrentOperation(current.downloadState, operationJob)
+                    ) {
                         false
                     } else {
                         directHttpDownloader.clearResumeMetadata(partialFile)
-                        task.downloadState = Completed(paths.firstOrNull())
+                        taskStateMap[task] = current.copy(downloadState = Completed(paths.firstOrNull()))
                         true
                     }
                 }
@@ -667,11 +862,11 @@ class DownloaderV2Impl(private val appContext: Context) : DownloaderV2, KoinComp
         val stagingFile = File(directory, ".${safeName}.$nameToken.partial")
         if (stagingFile.exists() && !stagingFile.delete()) throw IOException("Cannot reset staging file")
         ensureAvailableSpace(directory, partialFile.length())
-        task.copyDirectHttpPartial(partialFile, stagingFile)
+        task.copyDirectHttpPartial(operationJob, partialFile, stagingFile)
 
         val finalPath =
             synchronized(task) {
-                task.checkDirectHttpTaskRunning()
+                task.checkDirectHttpTaskRunning(operationJob)
                 synchronized(outputFileLock) {
                     var committedPath: String? = null
                     for (suffix in 0..999) {
@@ -680,8 +875,17 @@ class DownloaderV2Impl(private val appContext: Context) : DownloaderV2, KoinComp
                         val destination = File(directory, candidateName)
                         if (destination.exists()) continue
                         if (stagingFile.renameTo(destination)) {
+                            val current = taskStateMap[task]
+                            if (
+                                current == null ||
+                                    !TaskRestorePolicy.isCurrentOperation(current.downloadState, operationJob)
+                            ) {
+                                destination.delete()
+                                throw CancellationException("Direct HTTP task is no longer running")
+                            }
                             directHttpDownloader.clearResumeMetadata(partialFile)
-                            task.downloadState = Completed(destination.absolutePath)
+                            taskStateMap[task] =
+                                current.copy(downloadState = Completed(destination.absolutePath))
                             committedPath = destination.absolutePath
                             break
                         }
@@ -696,19 +900,20 @@ class DownloaderV2Impl(private val appContext: Context) : DownloaderV2, KoinComp
         return listOf(finalPath)
     }
 
-    private fun Task.checkDirectHttpTaskRunning() {
-        if (taskStateMap[this]?.downloadState !is Running) {
+    private fun Task.checkDirectHttpTaskRunning(operationJob: Job) {
+        val running = taskStateMap[this]?.downloadState as? Running
+        if (running?.job !== operationJob) {
             throw CancellationException("Direct HTTP task is no longer running")
         }
     }
 
-    private fun Task.copyDirectHttpPartial(source: File, destination: File) {
-        checkDirectHttpTaskRunning()
+    private fun Task.copyDirectHttpPartial(operationJob: Job, source: File, destination: File) {
+        checkDirectHttpTaskRunning(operationJob)
         source.inputStream().use { input ->
             java.io.FileOutputStream(destination, false).use { output ->
                 val buffer = ByteArray(64 * 1024)
                 while (true) {
-                    checkDirectHttpTaskRunning()
+                    checkDirectHttpTaskRunning(operationJob)
                     val count = input.read(buffer)
                     if (count < 0) break
                     if (count == 0) continue
@@ -717,7 +922,7 @@ class DownloaderV2Impl(private val appContext: Context) : DownloaderV2, KoinComp
                 output.fd.sync()
             }
         }
-        checkDirectHttpTaskRunning()
+        checkDirectHttpTaskRunning(operationJob)
     }
 
     private fun deletePublishedDirectHttpFiles(paths: List<String>) {
@@ -938,65 +1143,80 @@ class DownloaderV2Impl(private val appContext: Context) : DownloaderV2, KoinComp
                         _,
                         text ->
                         val progress = progressPercentage / 100f
-                        when (val preState = downloadState) {
-                            is Running -> {
-                                if (preState.job === operationJob) {
-                                    downloadState =
-                                        preState.copy(progress = progress, progressText = text)
-                                    NotificationUtil.makeNotificationForCustomCommand(
-                                        notificationId = notificationId,
-                                        taskId = id,
-                                        progress = progressPercentage.toInt(),
-                                        templateName = template.name,
-                                        taskUrl = url,
-                                        text = text,
-                                        canPause = true,
-                                    )
-                                }
-                            }
-                            else -> {}
+                        task.updateIfCurrentOperation(
+                            operationJob,
+                            update = { current ->
+                                val running =
+                                    (current.downloadState as? Running)
+                                        ?.takeIf { it.job === operationJob }
+                                        ?: return@updateIfCurrentOperation null
+                                current.copy(
+                                    downloadState = running.copy(progress = progress, progressText = text)
+                                )
+                            },
+                        ) {
+                            NotificationUtil.makeNotificationForCustomCommand(
+                                notificationId = notificationId,
+                                taskId = id,
+                                progress = progressPercentage.toInt(),
+                                templateName = template.name,
+                                taskUrl = url,
+                                text = text,
+                                canPause = true,
+                            )
                         }
                     }
                     .onFailure { throwable ->
                         if (
                             throwable is YoutubeDL.CanceledException ||
-                                throwable is CancellationException ||
-                                !task.isCurrentOperation(operationJob)
+                                throwable is CancellationException
                         ) return@onFailure
-                        downloadState = Error(throwable = throwable, action = Download)
-                        NotificationUtil.notifyError(
-                            title = viewState.title,
-                            textId = R.string.fetch_info_error_msg,
-                            notificationId = notificationId,
-                            report = throwable.stackTraceToString(),
-                        )
+                        task.updateIfCurrentOperation(
+                            operationJob,
+                            update = { current ->
+                                current.copy(downloadState = Error(throwable = throwable, action = Download))
+                            },
+                        ) {
+                            NotificationUtil.notifyError(
+                                title = viewState.title,
+                                textId = R.string.fetch_info_error_msg,
+                                notificationId = notificationId,
+                                report = throwable.stackTraceToString(),
+                            )
+                        }
                     }
                     .onSuccess {
-                        if (!task.isCurrentOperation(operationJob)) return@onSuccess
-                        downloadState = Completed(null)
-
-                        val text = appContext.getString(R.string.status_completed)
-
-                        NotificationUtil.finishNotification(
-                            notificationId = notificationId,
-                            title = viewState.title,
-                            text = text,
-                            intent = null,
-                        )
+                        task.updateIfCurrentOperation(
+                            operationJob,
+                            update = { current -> current.copy(downloadState = Completed(null)) },
+                        ) {
+                            NotificationUtil.finishNotification(
+                                notificationId = notificationId,
+                                title = viewState.title,
+                                text = appContext.getString(R.string.status_completed),
+                                intent = null,
+                            )
+                        }
                     }
             }
-        downloadState = Running(job = job, taskId = id)
+        if (
+            !task.beginOperation(Idle, Running(job = job, taskId = id)) {
+                NotificationUtil.makeNotificationForCustomCommand(
+                    notificationId = notificationId,
+                    taskId = id,
+                    progress = -1,
+                    templateName = template.name,
+                    taskUrl = url,
+                    canPause = true,
+                )
+            }
+        ) {
+            job.cancel()
+            return
+        }
         job.invokeOnCompletion { cause ->
             if (cause != null) handleUnexpectedFailure(job, Download, cause)
         }
-        NotificationUtil.makeNotificationForCustomCommand(
-            notificationId = notificationId,
-            taskId = id,
-            progress = -1,
-            templateName = template.name,
-            taskUrl = url,
-            canPause = true,
-        )
         job.start()
     }
 
@@ -1005,21 +1225,52 @@ class DownloaderV2Impl(private val appContext: Context) : DownloaderV2, KoinComp
         return TaskRestorePolicy.isCurrentOperation(currentState, job)
     }
 
+    private fun Task.beginOperation(
+        expectedState: DownloadState,
+        nextState: DownloadState,
+        afterUpdate: () -> Unit = {},
+    ): Boolean =
+        synchronized(this) {
+            val current = taskStateMap[this] ?: return@synchronized false
+            if (current.downloadState != expectedState) return@synchronized false
+            taskStateMap[this] = current.copy(downloadState = nextState)
+            afterUpdate()
+            true
+        }
+
+    private fun Task.updateIfCurrentOperation(
+        job: Job,
+        update: (Task.State) -> Task.State?,
+        afterUpdate: () -> Unit = {},
+    ): Boolean =
+        synchronized(this) {
+            val current = taskStateMap[this] ?: return@synchronized false
+            if (!TaskRestorePolicy.isCurrentOperation(current.downloadState, job)) {
+                return@synchronized false
+            }
+            val updated = update(current) ?: return@synchronized false
+            taskStateMap[this] = updated
+            afterUpdate()
+            true
+        }
+
     private fun Task.handleUnexpectedFailure(
         job: kotlinx.coroutines.Job,
         action: Task.RestartableAction,
         cause: Throwable,
     ) {
         if (cause is CancellationException || cause is YoutubeDL.CanceledException) return
-        if (!isCurrentOperation(job)) return
-
-        downloadState = Error(throwable = cause, action = action)
-        NotificationUtil.notifyError(
-            title = viewState.title,
-            textId = if (action == FetchInfo) R.string.download_error_msg else R.string.fetch_info_error_msg,
-            notificationId = notificationId,
-            report = cause.stackTraceToString(),
-        )
+        updateIfCurrentOperation(
+            job,
+            update = { current -> current.copy(downloadState = Error(throwable = cause, action = action)) },
+        ) {
+            NotificationUtil.notifyError(
+                title = viewState.title,
+                textId = if (action == FetchInfo) R.string.download_error_msg else R.string.fetch_info_error_msg,
+                notificationId = notificationId,
+                report = cause.stackTraceToString(),
+            )
+        }
     }
 
     /** Adds the selected file size once, without replacing yt-dlp's own progress text. */

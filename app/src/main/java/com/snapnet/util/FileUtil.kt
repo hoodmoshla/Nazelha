@@ -148,7 +148,8 @@ object FileUtil {
                         if (file.isDirectory) return@forEach
                         checkActive()
                         val mimeType =
-                            MimeTypeMap.getSingleton().getMimeTypeFromExtension(file.extension) ?: "*/*"
+                            MimeTypeMap.getSingleton().getMimeTypeFromExtension(file.extension)
+                                ?: "*/*"
 
                         val destUri =
                             DocumentsContract.createDocument(
@@ -163,7 +164,9 @@ object FileUtil {
                             file.inputStream().use { input ->
                                 val outputStream =
                                     context.contentResolver.openOutputStream(destUri)
-                                        ?: throw IOException("Could not open the selected SD card file")
+                                        ?: throw IOException(
+                                            "Could not open the selected SD card file"
+                                        )
                                 outputStream.use { output ->
                                     val buffer = ByteArray(64 * 1024)
                                     while (true) {
@@ -195,11 +198,24 @@ object FileUtil {
         return res
     }
 
-    fun clearTempFiles(downloadDir: File): Int {
+    fun clearTempFiles(downloadDir: File, protectedFileNames: Set<String> = emptySet()): Int {
+        // This helper is only for app-owned temp folders, never cache/config or download folders.
+        if (downloadDir.name != "tmp" || !downloadDir.isDirectory) return 0
         var count = 0
-        downloadDir.walkTopDown().forEach {
-            if (it.isFile && !it.isHidden) {
-                if (it.delete()) count++
+        downloadDir.walkTopDown().forEach { file ->
+            if (!file.isFile || file.isHidden || file.name in protectedFileNames) return@forEach
+            if (
+                file.name == "cookies.txt" ||
+                    (file.name.startsWith("config") && file.name.endsWith(".txt"))
+            ) {
+                return@forEach
+            }
+            if (file.delete()) {
+                count++
+                if (file.name.startsWith("direct-http-") && file.name.endsWith(".part")) {
+                    val metadata = File(file.parentFile, ".${file.name}.resume")
+                    if (metadata.delete()) count++
+                }
             }
         }
         return count
@@ -225,7 +241,10 @@ object FileUtil {
     fun Context.getInternalTempDir() = File(filesDir, "tmp")
 
     internal fun getExternalDownloadDirectory() =
-        File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "Nazelha")
+        File(
+                Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS),
+                "Nazelha",
+            )
             .also { it.mkdir() }
 
     internal fun getExternalPrivateDownloadDirectory() =

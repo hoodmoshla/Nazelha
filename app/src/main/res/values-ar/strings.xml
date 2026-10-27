@@ -132,6 +132,12 @@
     <string name="unknown_error">خطأ غير معروف</string>
     <string name="share_fail_msg">تعذر مطابقة عنوان URL من المحتوى المشترك</string>
     <string name="share_success_msg">جارٍ قراءة رابط الفيديو من المحتوى المشترك …</string>
+    <string name="http_download_warning_title">رابط HTTP غير مشفر</string>
+    <string name="http_download_warning_message">يستخدم هذا الرابط إلى %1$s اتصال HTTP غير مشفر؛ قد يتمكن أحد على الشبكة من مراقبة النقل أو تغييره. لن يرسل نزّلها ملفات cookies أو بيانات دخول محفوظة. تابع فقط إن كنت تثق بهذا الرابط المحدد؛ والموافقة لهذا التنزيل وحده.</string>
+    <string name="http_download_continue">المتابعة عبر HTTP</string>
+    <string name="http_video_extractor_unsupported">لأسباب أمنية، لا ندعم صفحات HTTP التي تحتاج إلى yt-dlp أو أوامر مخصصة. استخدم صفحة HTTPS أو اختر رابط ملف مباشر.</string>
+    <string name="unsupported_url_scheme">تُقبل روابط HTTP وHTTPS فقط. تُحظر روابط file وcontent وJavaScript وintent.</string>
+    <string name="http_resume_requires_app">افتح نزّلها وأكّد تنزيل HTTP قبل استئنافه.</string>
     <string name="from">بداية</string>
     <string name="to">نهاية</string>
     <string name="playlist_indicator_text">جارٍ تنزيل قائمة التشغيل (%1$d/%2$d)…</string>
@@ -230,10 +236,11 @@
     <string name="generate_new_cookies">إنشاء ملفات تعريف ارتباط جديدة</string>
     <string name="use_cookies">استخدام ملفات تعريف الارتباط</string>
     <string name="remove_cookie_profile_desc">هل تريد حذف ملفات تعريف الارتباط الخاصة بـ \"%1$s\" ؟ يرجي العلم بأن ملفات تعريف الارتباط الخاصة بهذا الموقع لن تمسح.</string>
+    <string name="cookie_profile_https_required">تتطلب ملفات تعريف الارتباط موقعًا صالحًا عبر HTTPS لحماية بيانات تسجيل الدخول.</string>
     <string name="custom_command_enabled_hint">قد لا تتوفر بعض الخيارات عند استخدام الأوامر المخصصة</string>
     <string name="how_does_it_work">كيف يعمل؟</string>
-    <string name="telegram_channel">قناة Telegram</string>
     <string name="cookies_usage_msg">يتطلب التنزيل من بعض المواقع معلومات مصادقة الحساب. انقر فوق \"إنشاء ملفات تعريف ارتباط جديدة\" ، وأدخل عنوان URL لموقع الويب ، ثم قم بتسجيل الدخول باستخدام حسابك في صفحة المتصفح ، وسيقوم التطبيق بإنشائه لك.</string>
+    <string name="telegram_channel">قناة Telegram</string>
     <string name="youtube_cookies_required">يتطلب YouTube تسجيل الدخول عبر ملفات تعريف الارتباط على هذه الشبكة. افتح الإعدادات &gt; الشبكة &gt; ملفات تعريف الارتباط، واضغط «إنشاء ملفات تعريف ارتباط جديدة»، وأدخل https://www.youtube.com وسجّل الدخول في المتصفح المضمّن، ثم فعّل «استخدام ملفات تعريف الارتباط» وأعد المحاولة.</string>
     <string name="matrix_space">مساحة Matrix</string>
     <string name="cookies">كوكيز</string>

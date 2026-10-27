@@ -14,7 +14,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
@@ -26,7 +25,6 @@ import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material3.Card
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -46,11 +44,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
 import com.snapnet.R
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
@@ -62,11 +60,11 @@ internal fun isSafeExternalBrowserScheme(scheme: String?, hasGesture: Boolean): 
     return hasGesture && normalizedScheme in SAFE_EXTERNAL_BROWSER_SCHEMES
 }
 
+internal fun isAllowedInAppBrowserScheme(scheme: String?): Boolean =
+    scheme?.equals("https", ignoreCase = true) == true
+
 @Composable
-fun BrowserPage(
-    onDownloadLink: (String) -> Unit,
-    modifier: Modifier = Modifier,
-) {
+fun BrowserPage(onDownloadLink: (String) -> Unit, modifier: Modifier = Modifier) {
     val context = LocalContext.current
     var address by rememberSaveable { mutableStateOf("") }
     var currentUrl by rememberSaveable { mutableStateOf("") }
@@ -87,52 +85,66 @@ fun BrowserPage(
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) settings.safeBrowsingEnabled = true
             CookieManager.getInstance().setAcceptThirdPartyCookies(this, false)
 
-            webChromeClient = object : WebChromeClient() {
-                override fun onProgressChanged(view: WebView, newProgress: Int) {
-                    progress = newProgress
-                    canGoBack = view.canGoBack()
-                    canGoForward = view.canGoForward()
-                }
-            }
-            webViewClient = object : WebViewClient() {
-                override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
-                    val uri = request.url
-                    val scheme = uri.scheme?.lowercase()
-                    if (scheme == "http" || scheme == "https") return false
-                    if (!isSafeExternalBrowserScheme(scheme, request.hasGesture())) return true
-                    return try {
-                        context.startActivity(
-                            Intent(Intent.ACTION_VIEW, uri).addCategory(Intent.CATEGORY_BROWSABLE)
-                        )
-                        true
-                    } catch (_: Exception) {
-                        true
+            webChromeClient =
+                object : WebChromeClient() {
+                    override fun onProgressChanged(view: WebView, newProgress: Int) {
+                        progress = newProgress
+                        canGoBack = view.canGoBack()
+                        canGoForward = view.canGoForward()
                     }
                 }
+            webViewClient =
+                object : WebViewClient() {
+                    override fun shouldOverrideUrlLoading(
+                        view: WebView,
+                        request: WebResourceRequest,
+                    ): Boolean {
+                        val uri = request.url
+                        val scheme = uri.scheme?.lowercase()
+                        if (isAllowedInAppBrowserScheme(scheme)) return false
+                        if (scheme == "http") {
+                            pageFailed = true
+                            return true
+                        }
+                        if (!isSafeExternalBrowserScheme(scheme, request.hasGesture())) return true
+                        return try {
+                            context.startActivity(
+                                Intent(Intent.ACTION_VIEW, uri)
+                                    .addCategory(Intent.CATEGORY_BROWSABLE)
+                            )
+                            true
+                        } catch (_: Exception) {
+                            true
+                        }
+                    }
 
-                override fun onPageStarted(view: WebView, url: String, favicon: android.graphics.Bitmap?) {
-                    currentUrl = url
-                    address = url
-                    pageFailed = false
-                    canGoBack = view.canGoBack()
-                    canGoForward = view.canGoForward()
-                }
+                    override fun onPageStarted(
+                        view: WebView,
+                        url: String,
+                        favicon: android.graphics.Bitmap?,
+                    ) {
+                        currentUrl = url
+                        address = url
+                        pageFailed = false
+                        canGoBack = view.canGoBack()
+                        canGoForward = view.canGoForward()
+                    }
 
-                override fun onPageFinished(view: WebView, url: String) {
-                    currentUrl = url
-                    address = url
-                    canGoBack = view.canGoBack()
-                    canGoForward = view.canGoForward()
-                }
+                    override fun onPageFinished(view: WebView, url: String) {
+                        currentUrl = url
+                        address = url
+                        canGoBack = view.canGoBack()
+                        canGoForward = view.canGoForward()
+                    }
 
-                override fun onReceivedError(
-                    view: WebView,
-                    request: WebResourceRequest,
-                    error: android.webkit.WebResourceError,
-                ) {
-                    if (request.isForMainFrame) pageFailed = true
+                    override fun onReceivedError(
+                        view: WebView,
+                        request: WebResourceRequest,
+                        error: android.webkit.WebResourceError,
+                    ) {
+                        if (request.isForMainFrame) pageFailed = true
+                    }
                 }
-            }
             setDownloadListener { url, _, _, _, _ -> onDownloadLink(url) }
         }
     }
@@ -149,16 +161,20 @@ fun BrowserPage(
     fun navigateToAddress() {
         val input = address.trim()
         if (input.isBlank()) return
-        val candidate = if (input.contains(' ') || !input.contains('.')) {
-            val query = URLEncoder.encode(input, StandardCharsets.UTF_8.toString())
-            "https://www.google.com/search?q=$query"
-        } else if (input.startsWith("https://", ignoreCase = true) || input.startsWith("http://", ignoreCase = true)) {
-            input
-        } else {
-            "https://$input"
-        }
+        val candidate =
+            if (input.contains(' ') || !input.contains('.')) {
+                val query = URLEncoder.encode(input, StandardCharsets.UTF_8.toString())
+                "https://www.google.com/search?q=$query"
+            } else if (
+                input.startsWith("https://", ignoreCase = true) ||
+                    input.startsWith("http://", ignoreCase = true)
+            ) {
+                input
+            } else {
+                "https://$input"
+            }
         val uri = Uri.parse(candidate)
-        if (uri.scheme !in setOf("http", "https") || uri.host.isNullOrBlank()) {
+        if (!isAllowedInAppBrowserScheme(uri.scheme) || uri.host.isNullOrBlank()) {
             pageFailed = true
             return
         }
@@ -185,7 +201,10 @@ fun BrowserPage(
             )
             IconButton(
                 onClick = { navigateToAddress() },
-                modifier = Modifier.semantics { contentDescription = context.getString(R.string.browser_go) },
+                modifier =
+                    Modifier.semantics {
+                        contentDescription = context.getString(R.string.browser_go)
+                    },
             ) {
                 Icon(Icons.AutoMirrored.Outlined.ArrowForward, contentDescription = null)
             }
@@ -196,15 +215,26 @@ fun BrowserPage(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             IconButton(onClick = { browser.goBack() }, enabled = canGoBack) {
-                Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = stringResource(R.string.browser_back))
+                Icon(
+                    Icons.AutoMirrored.Outlined.ArrowBack,
+                    contentDescription = stringResource(R.string.browser_back),
+                )
             }
             IconButton(onClick = { browser.goForward() }, enabled = canGoForward) {
-                Icon(Icons.AutoMirrored.Outlined.ArrowForward, contentDescription = stringResource(R.string.browser_forward))
+                Icon(
+                    Icons.AutoMirrored.Outlined.ArrowForward,
+                    contentDescription = stringResource(R.string.browser_forward),
+                )
             }
             IconButton(
-                onClick = { if (browser.progress < 100) browser.stopLoading() else browser.reload() },
+                onClick = {
+                    if (browser.progress < 100) browser.stopLoading() else browser.reload()
+                }
             ) {
-                Icon(Icons.Outlined.Refresh, contentDescription = stringResource(R.string.browser_refresh))
+                Icon(
+                    Icons.Outlined.Refresh,
+                    contentDescription = stringResource(R.string.browser_refresh),
+                )
             }
             IconButton(
                 onClick = {
@@ -212,7 +242,9 @@ fun BrowserPage(
                         runCatching {
                             context.startActivity(
                                 Intent.createChooser(
-                                    Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, url),
+                                    Intent(Intent.ACTION_SEND)
+                                        .setType("text/plain")
+                                        .putExtra(Intent.EXTRA_TEXT, url),
                                     context.getString(R.string.share),
                                 )
                             )
@@ -231,12 +263,18 @@ fun BrowserPage(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         if (progress in 1..99) {
-            LinearProgressIndicator(progress = { progress / 100f }, modifier = Modifier.fillMaxWidth())
+            LinearProgressIndicator(
+                progress = { progress / 100f },
+                modifier = Modifier.fillMaxWidth(),
+            )
         }
         if (currentUrl.isBlank()) {
             Card(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
                 Column(modifier = Modifier.padding(18.dp)) {
-                    Text(stringResource(R.string.browser_welcome), style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        stringResource(R.string.browser_welcome),
+                        style = MaterialTheme.typography.titleMedium,
+                    )
                 }
             }
         }
@@ -256,7 +294,12 @@ fun BrowserPage(
                     color = MaterialTheme.colorScheme.error,
                     style = MaterialTheme.typography.bodySmall,
                 )
-                TextButton(onClick = { browser.reload(); pageFailed = false }) {
+                TextButton(
+                    onClick = {
+                        browser.reload()
+                        pageFailed = false
+                    }
+                ) {
                     Text(stringResource(R.string.browser_retry))
                 }
             }

@@ -152,7 +152,7 @@ fun PlaylistSelectionPage(
                     val preferences = preferences.copy(extractAudio = it == Audio)
                     taskList
                         .map { it.copy(task = it.task.copy(preferences = preferences)) }
-                        .forEach(downloader::enqueue)
+                        .forEach { downloader.enqueue(it, state.httpConsentGranted) }
                     onDismissConfigurationSheet()
                     onBack()
                 },

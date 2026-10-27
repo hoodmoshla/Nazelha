@@ -21,6 +21,7 @@ import com.snapnet.Downloader.toNotificationId
 import com.snapnet.R
 import com.snapnet.database.objects.CommandTemplate
 import com.snapnet.database.objects.DownloadedVideoInfo
+import com.snapnet.download.http.HttpDownloadSecurityPolicy
 import com.snapnet.ui.page.settings.network.Cookie
 import com.snapnet.util.FileUtil.getArchiveFile
 import com.snapnet.util.FileUtil.getConfigFile
@@ -38,11 +39,12 @@ import com.yausername.youtubedl_android.YoutubeDL
 import com.yausername.youtubedl_android.YoutubeDLException
 import com.yausername.youtubedl_android.YoutubeDLRequest
 import com.yausername.youtubedl_android.YoutubeDLResponse
+import java.io.File
+import java.util.Locale
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
-import java.util.Locale
 
 object DownloadUtil {
 
@@ -81,14 +83,25 @@ object DownloadUtil {
     private const val PLAYLIST_TITLE_SUBDIRECTORY_PREFIX = "%(playlist)s/"
 
     private const val CROP_ARTWORK_COMMAND =
-        """--ppa "ffmpeg: -c:v mjpeg -vf crop=\"'if(gt(ih,iw),iw,ih)':'if(gt(iw,ih),ih,iw)'\"""""
+        """--ppa "ffmpeg: -c:v mjpeg -vf crop=\"'if(gt(ih,iw),iw,ih)':'if(gt(iw,ih),ih,iw)'\""""
+
+    private fun sourcePolicyFailure(url: String): YoutubeDLException {
+        val messageRes =
+            if (HttpDownloadSecurityPolicy.requiresUserConfirmation(url))
+                R.string.http_video_extractor_unsupported
+            else R.string.unsupported_url_scheme
+        return YoutubeDLException(context.getString(messageRes))
+    }
 
     @CheckResult
     fun getPlaylistOrVideoInfo(
         playlistURL: String,
         downloadPreferences: DownloadPreferences = DownloadPreferences.createFromPreferences(),
-    ): Result<YoutubeDLInfo> =
-        YoutubeDL.runCatching {
+    ): Result<YoutubeDLInfo> {
+        if (!HttpDownloadSecurityPolicy.mayUseYtDlp(playlistURL)) {
+            return Result.failure(sourcePolicyFailure(playlistURL))
+        }
+        return YoutubeDL.runCatching {
             ToastUtil.makeToastSuspend(context.getString(R.string.fetching_playlist_info))
             val request = YoutubeDLRequest(playlistURL)
             with(request) {
@@ -124,6 +137,7 @@ object DownloadUtil {
                 } else playlistInfo
             }
         }
+    }
 
     @CheckResult
     private fun getVideoInfo(
@@ -143,6 +157,9 @@ object DownloadUtil {
         taskKey: String? = null,
         preferences: DownloadPreferences = DownloadPreferences.createFromPreferences(),
     ): Result<VideoInfo> {
+        if (!HttpDownloadSecurityPolicy.mayUseYtDlp(url)) {
+            return Result.failure(sourcePolicyFailure(url))
+        }
         with(preferences) {
             val request =
                 YoutubeDLRequest(url).apply {
@@ -153,7 +170,8 @@ object DownloadUtil {
                     if (extractAudio) {
                         addOption("-x")
                     }
-                    // Listing every quality must not apply a preferred-resolution sorter; it can omit
+                    // Listing every quality must not apply a preferred-resolution sorter; it can
+                    // omit
                     // lower real qualities before the share sheet sees them.
                     if (taskKey?.startsWith("FetchShared_") != true) {
                         applyFormatSorter(this@with, toFormatSorter())
@@ -363,10 +381,25 @@ object DownloadUtil {
     }
 
     private fun YoutubeDLRequest.enableCookies(userAgentString: String): YoutubeDLRequest =
-        this.addOption("--cookies", context.getCookiesFile().absolutePath).apply {
+        this.addOption("--cookies", getHttpsOnlyCookiesFile().absolutePath).apply {
             if (userAgentString.isNotEmpty()) {
                 addOption("--add-header", "User-Agent:$userAgentString")
             }
+        }
+
+    private val cookieSanitizationLock = Any()
+
+    private fun getHttpsOnlyCookiesFile(): File =
+        synchronized(cookieSanitizationLock) {
+            val source = context.getCookiesFile()
+            if (!source.isFile) return@synchronized source
+            val sanitized = File(context.cacheDir, "yt-dlp-cookies-https-only.txt")
+            val content = source.readText(Charsets.UTF_8)
+            sanitized.writeText(
+                CookieSecurityPolicy.httpsOnlyNetscapeContent(content),
+                Charsets.UTF_8,
+            )
+            sanitized
         }
 
     private fun YoutubeDLRequest.enableProxy(proxyUrl: String): YoutubeDLRequest =
@@ -535,11 +568,12 @@ object DownloadUtil {
                     7 -> "+res"
                     else -> ""
                 }
-            val sorter = if (videoFormat == FORMAT_COMPATIBILITY) {
-                connectWithDelimiter(format, res, delimiter = ",")
-            } else {
-                connectWithDelimiter(res, format, delimiter = ",")
-            }
+            val sorter =
+                if (videoFormat == FORMAT_COMPATIBILITY) {
+                    connectWithDelimiter(format, res, delimiter = ",")
+                } else {
+                    connectWithDelimiter(res, format, delimiter = ",")
+                }
             return@run sorter
         }
 
@@ -681,6 +715,12 @@ object DownloadUtil {
                             Throwable(context.getString(R.string.fetch_info_error_msg))
                         )
                 }
+            val candidateUrls =
+                listOfNotNull(url, videoInfo.originalUrl, videoInfo.webpageUrl)
+                    .filter(String::isNotBlank)
+            val blockedUrl =
+                candidateUrls.firstOrNull { !HttpDownloadSecurityPolicy.mayUseYtDlp(it) }
+            if (blockedUrl != null) return Result.failure(sourcePolicyFailure(blockedUrl))
             val request = YoutubeDLRequest(url)
             val pathBuilder = StringBuilder()
             val outputBuilder = StringBuilder()
@@ -813,9 +853,7 @@ object DownloadUtil {
                             message.contains("not a bot", ignoreCase = true)
                     ) {
                         return Result.failure(
-                            YoutubeDLException(
-                                context.getString(R.string.youtube_cookies_required)
-                            )
+                            YoutubeDLException(context.getString(R.string.youtube_cookies_required))
                         )
                     }
                     return if (
@@ -935,12 +973,21 @@ object DownloadUtil {
         template: CommandTemplate = PreferenceUtil.getTemplate(),
         downloadPreferences: DownloadPreferences = DownloadPreferences.createFromPreferences(),
     ) {
+        val urlList = url.split(Regex("[\n ]")).filter { it.isNotBlank() }
+        val blockedUrl = urlList.firstOrNull { !HttpDownloadSecurityPolicy.mayUseYtDlp(it) }
+        if (blockedUrl != null) {
+            val messageRes =
+                if (HttpDownloadSecurityPolicy.requiresUserConfirmation(blockedUrl))
+                    R.string.http_video_extractor_unsupported
+                else R.string.unsupported_url_scheme
+            ToastUtil.makeToastSuspend(context.getString(messageRes))
+            return
+        }
         App.awaitYtDlpReady()
         App.ensureForegroundServiceReady()
         downloadPreferences.run {
             val taskId = Downloader.makeKey(url = url, templateName = template.name)
             val notificationId = taskId.toNotificationId()
-            val urlList = url.split(Regex("[\n ]")).filter { it.isNotBlank() }
 
             ToastUtil.makeToastSuspend(context.getString(R.string.start_execute))
             val request =

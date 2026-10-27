@@ -76,6 +76,7 @@ import com.google.accompanist.permissions.PermissionStatus
 import com.google.accompanist.permissions.rememberPermissionState
 import com.snapnet.App
 import com.snapnet.R
+import com.snapnet.download.DownloaderV2
 import com.snapnet.ui.common.booleanState
 import com.snapnet.ui.common.stringState
 import com.snapnet.ui.component.BackButton
@@ -96,7 +97,6 @@ import com.snapnet.util.CUSTOM_COMMAND
 import com.snapnet.util.CUSTOM_OUTPUT_TEMPLATE
 import com.snapnet.util.DownloadUtil
 import com.snapnet.util.FileUtil
-import com.snapnet.util.FileUtil.getConfigDirectory
 import com.snapnet.util.FileUtil.getExternalTempDir
 import com.snapnet.util.OUTPUT_TEMPLATE
 import com.snapnet.util.PRIVATE_DIRECTORY
@@ -113,6 +113,7 @@ import com.snapnet.util.SUBDIRECTORY_PLAYLIST_TITLE
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import org.koin.compose.koinInject
 
 private const val ytdlpOutputTemplateReference = "https://github.com/yt-dlp/yt-dlp#output-template"
 private val PublicDownloadsDirectory =
@@ -145,6 +146,7 @@ fun DownloadDirectoryPreferences(onNavigateBack: () -> Unit) {
             canScroll = { true },
         )
     val context = LocalContext.current
+    val downloader: DownloaderV2 = koinInject()
     val snackbarHostState = remember { SnackbarHostState() }
 
     var showSubdirectoryDialog by remember { mutableStateOf(false) }
@@ -405,13 +407,7 @@ fun DownloadDirectoryPreferences(onNavigateBack: () -> Unit) {
                 ConfirmButton {
                     showClearTempDialog = false
                     scope.launch(Dispatchers.IO) {
-                        FileUtil.clearTempFiles(context.getConfigDirectory())
-                        val count =
-                            FileUtil.run {
-                                clearTempFiles(getExternalTempDir()) +
-                                    clearTempFiles(context.getSdcardTempDir(null)) +
-                                    clearTempFiles(context.getInternalTempDir())
-                            }
+                        val count = downloader.clearTemporaryFiles()
 
                         withContext(Dispatchers.Main) {
                             snackbarHostState.showSnackbar(

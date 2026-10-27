@@ -105,6 +105,7 @@ import com.snapnet.ui.common.HapticFeedback.longPressHapticFeedback
 import com.snapnet.ui.common.motion.materialSharedAxisX
 import com.snapnet.ui.component.ButtonChip
 import com.snapnet.ui.component.DrawerSheetSubtitle
+import com.snapnet.ui.component.HttpDownloadWarningDialog
 import com.snapnet.ui.component.OutlinedButtonWithIcon
 import com.snapnet.ui.component.SealModalBottomSheet
 import com.snapnet.ui.component.SingleChoiceChip
@@ -120,8 +121,10 @@ import com.snapnet.ui.page.downloadv2.configure.DownloadDialogViewModel.SheetSta
 import com.snapnet.ui.page.downloadv2.configure.DownloadDialogViewModel.SheetState.DirectHttpPreview
 import com.snapnet.ui.page.downloadv2.configure.DownloadDialogViewModel.SheetState.DiscoveredPageLinks
 import com.snapnet.ui.page.downloadv2.configure.DownloadDialogViewModel.SheetState.Error
+import com.snapnet.ui.page.downloadv2.configure.DownloadDialogViewModel.SheetState.HttpWarning
 import com.snapnet.ui.page.downloadv2.configure.DownloadDialogViewModel.SheetState.InputUrl
 import com.snapnet.ui.page.downloadv2.configure.DownloadDialogViewModel.SheetState.Loading
+import com.snapnet.ui.page.downloadv2.configure.DownloadDialogViewModel.SheetState.UnsupportedUrl
 import com.snapnet.ui.page.downloadv2.downloadErrorMessageRes
 import com.snapnet.ui.page.downloadv2.redactDownloadErrorDetails
 import com.snapnet.ui.page.settings.command.CommandTemplateDialog
@@ -343,8 +346,7 @@ private fun ErrorPage(modifier: Modifier = Modifier, state: Error, onActionPost:
                     clipboardManager.setText(
                         AnnotatedString(
                             redactDownloadErrorDetails(
-                                App.getVersionReport() +
-                                    "\nURL: ${url}\n${state.throwable.message}"
+                                App.getVersionReport() + "\nURL: ${url}\n${state.throwable.message}"
                             )
                         )
                     )
@@ -424,6 +426,33 @@ private fun DownloadDialogContent(
                 ErrorPage(state = state, onActionPost = onActionPost)
             }
 
+            is HttpWarning -> {
+                HttpDownloadWarningDialog(
+                    url = state.url,
+                    onConfirm = { onActionPost(Action.ConfirmHttpDownload) },
+                    onDismiss = { onActionPost(Action.CancelHttpDownload) },
+                )
+            }
+
+            is UnsupportedUrl -> {
+                Column(
+                    modifier = Modifier.fillMaxWidth().padding(24.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    Text(
+                        stringResource(R.string.download_error_msg),
+                        style = MaterialTheme.typography.titleMedium,
+                    )
+                    Text(
+                        stringResource(state.messageRes),
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    Button(onClick = { onActionPost(Action.HideSheet) }) {
+                        Text(stringResource(R.string.close))
+                    }
+                }
+            }
+
             is DirectHttpPreview -> {
                 DirectHttpFilePreviewPage(
                     state = state,
@@ -462,10 +491,7 @@ private fun DirectHttpFilePreviewPage(
     onActionPost: (Action) -> Unit,
 ) {
     Column(
-        modifier =
-            Modifier.fillMaxWidth()
-                .verticalScroll(rememberScrollState())
-                .padding(24.dp),
+        modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(24.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         Text(
@@ -485,7 +511,10 @@ private fun DirectHttpFilePreviewPage(
         val size =
             state.file.sizeBytes?.toFileSizeText()
                 ?: stringResource(R.string.direct_file_size_unknown)
-        Text(text = stringResource(R.string.direct_file_size, size), style = MaterialTheme.typography.bodyMedium)
+        Text(
+            text = stringResource(R.string.direct_file_size, size),
+            style = MaterialTheme.typography.bodyMedium,
+        )
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Button(
                 onClick = {
@@ -494,6 +523,7 @@ private fun DirectHttpFilePreviewPage(
                             url = state.url,
                             file = state.file,
                             preferences = preferences,
+                            httpConsentGranted = state.httpConsentGranted,
                         )
                     )
                 }
@@ -508,10 +538,7 @@ private fun DirectHttpFilePreviewPage(
 }
 
 @Composable
-private fun DiscoveredPageLinksPage(
-    state: DiscoveredPageLinks,
-    onActionPost: (Action) -> Unit,
-) {
+private fun DiscoveredPageLinksPage(state: DiscoveredPageLinks, onActionPost: (Action) -> Unit) {
     Column(
         modifier = Modifier.fillMaxWidth().padding(24.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -720,6 +747,7 @@ fun FormatPage(
                     modifier = Modifier.weight(1f),
                     videoInfo = state.info,
                     isSharedIntent = state.isSharedIntent,
+                    httpConsentGranted = state.httpConsentGranted,
                     onNavigateBack = dismissSheet,
                 )
             }

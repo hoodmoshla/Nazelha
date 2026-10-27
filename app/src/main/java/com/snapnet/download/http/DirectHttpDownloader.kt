@@ -36,10 +36,32 @@ class DirectHttpDownloader(private val client: OkHttpClient = DirectHttpClientPr
         file: DirectHttpFile,
         partialFile: File,
         onProgress: (downloadedBytes: Long, totalBytes: Long?) -> Unit,
+    ): Long =
+        download(
+            taskId = taskId,
+            file = file,
+            partialFile = partialFile,
+            shouldContinue = { true },
+            onProgress = onProgress,
+        )
+
+    @Suppress("UsableSpace") // Conservative: do not count cache bytes Android may reclaim.
+    @Throws(IOException::class, CancellationException::class)
+    fun download(
+        taskId: String,
+        file: DirectHttpFile,
+        partialFile: File,
+        shouldContinue: () -> Boolean,
+        onProgress: (downloadedBytes: Long, totalBytes: Long?) -> Unit,
     ): Long {
         val handle = WorkHandle()
         active[taskId] = handle
         try {
+            if (!shouldContinue()) {
+                handle.cancel()
+                throw CancellationException("HTTP download canceled")
+            }
+            checkNotCanceled(handle, handle.call)
             partialFile.parentFile?.let { parent ->
                 if (!parent.exists() && !parent.mkdirs())
                     throw IOException("Cannot create temporary folder")
@@ -56,12 +78,7 @@ class DirectHttpDownloader(private val client: OkHttpClient = DirectHttpClientPr
                 val existingBytes =
                     if (resumeState != null) partialFile.length().coerceAtLeast(0L) else 0L
                 val (response, call) =
-                    executeFollowingRedirects(
-                        file,
-                        existingBytes,
-                        resumeState?.validator,
-                        handle,
-                    )
+                    executeFollowingRedirects(file, existingBytes, resumeState?.validator, handle)
                 var completed: Long? = null
                 var retryFresh = false
                 response.use { result ->
@@ -88,12 +105,17 @@ class DirectHttpDownloader(private val client: OkHttpClient = DirectHttpClientPr
                         if (result.code !in 200..299) throw HttpStatusException(result.code)
 
                         val append = result.code == 206
-                        val responseRangeStart = parseContentRangeStart(result.header("Content-Range"))
+                        val responseRangeStart =
+                            parseContentRangeStart(result.header("Content-Range"))
                         val rangeTotal = parseContentRangeTotal(result.header("Content-Range"))
-                        val invalidOffset = append && (responseRangeStart != existingBytes || rangeTotal == null)
+                        val invalidOffset =
+                            append && (responseRangeStart != existingBytes || rangeTotal == null)
                         val changedValidator =
-                            append && existingBytes > 0L && resumeState != null &&
-                                !responseValidatorMatches(result, resumeState.validator)
+                            resumeState?.let { state ->
+                                append &&
+                                    existingBytes > 0L &&
+                                    !responseValidatorMatches(result, state.validator)
+                            } == true
                         if (invalidOffset || changedValidator) {
                             if (!retryFreshUsed) {
                                 resetPartial(partialFile)
@@ -128,8 +150,14 @@ class DirectHttpDownloader(private val client: OkHttpClient = DirectHttpClientPr
                                     ?: responseLength?.let { writeOffset + it }
                                     ?: file.sizeBytes
                             val availableBytes = partialFile.parentFile?.usableSpace
-                            if (availableBytes != null &&
-                                !DownloadStoragePolicy.canFit(availableBytes, totalBytes, writeOffset)) {
+                            if (
+                                availableBytes != null &&
+                                    !DownloadStoragePolicy.canFit(
+                                        availableBytes,
+                                        totalBytes,
+                                        writeOffset,
+                                    )
+                            ) {
                                 throw IOException("No space left on device for this download")
                             }
                             var written = writeOffset
@@ -140,8 +168,12 @@ class DirectHttpDownloader(private val client: OkHttpClient = DirectHttpClientPr
                                     while (true) {
                                         checkNotCanceled(handle, call)
                                         val count = input.read(buffer)
-                                        if (count < 0) break
-                                        if (count == 0) continue
+                                        if (count < 0) {
+                                            break
+                                        }
+                                        if (count == 0) {
+                                            continue
+                                        }
                                         output.write(buffer, 0, count)
                                         written += count
                                         onProgress(written, totalBytes)
@@ -224,14 +256,8 @@ class DirectHttpDownloader(private val client: OkHttpClient = DirectHttpClientPr
                 throw IOException("Too many or invalid HTTP redirects")
             }
             val next = current.resolve(location) ?: throw IOException("Invalid HTTP redirect")
-            if (current.scheme == "https" && next.scheme != "https") {
-                throw IOException("HTTPS downgrade redirect blocked")
-            }
-            if (next.scheme != "http" && next.scheme != "https") {
-                throw IOException("Non-HTTP redirect blocked")
-            }
-            if (next.username.isNotEmpty() || next.password.isNotEmpty()) {
-                throw IOException("Credentials in redirects are not supported")
+            if (!HttpDownloadSecurityPolicy.mayFollowRedirect(current, next)) {
+                throw IOException("Unsafe HTTP redirect blocked")
             }
             current = next
         }
@@ -250,7 +276,8 @@ class DirectHttpDownloader(private val client: OkHttpClient = DirectHttpClientPr
                 if (savedOwner != owner || value.isBlank()) return null
                 val validator =
                     when (type) {
-                        ETAG_TYPE -> value.takeIf(::isStrongEtag)?.let { ResumeValidator(ETAG_TYPE, it) }
+                        ETAG_TYPE ->
+                            value.takeIf(::isStrongEtag)?.let { ResumeValidator(ETAG_TYPE, it) }
                         LAST_MODIFIED_TYPE -> ResumeValidator(LAST_MODIFIED_TYPE, value)
                         else -> null
                     } ?: return null
@@ -339,6 +366,7 @@ class DirectHttpDownloader(private val client: OkHttpClient = DirectHttpClientPr
     }
 
     private data class ResumeValidator(val type: String, val value: String)
+
     private data class ResumeState(val validator: ResumeValidator)
 
     companion object {
@@ -354,12 +382,15 @@ class DirectHttpDownloader(private val client: OkHttpClient = DirectHttpClientPr
             File(partialFile.parentFile, ".${partialFile.name}$METADATA_SUFFIX")
 
         private fun taskDigest(taskId: String): String {
-            val digest = MessageDigest.getInstance("SHA-256").digest(taskId.toByteArray(Charsets.UTF_8))
+            val digest =
+                MessageDigest.getInstance("SHA-256").digest(taskId.toByteArray(Charsets.UTF_8))
             return digest.joinToString("") { byte -> "%02x".format(byte.toInt() and 0xff) }
         }
 
         private fun isStrongEtag(value: String): Boolean =
-            value.length >= 2 && value.first() == '"' && value.last() == '"' &&
+            value.length >= 2 &&
+                value.first() == '"' &&
+                value.last() == '"' &&
                 value.substring(1, value.lastIndex).all { char ->
                     char.code == 0x21 || char.code in 0x23..0x7e || char.code in 0x80..0xff
                 }

@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+    <!--
+        Cleartext is enabled at the platform layer only because the downloader can support an
+        explicitly selected HTTP URL. Application code must obtain per-link consent before any
+        request, never attach saved cookies to HTTP, and reject HTTPS-to-HTTP redirects.
+    -->
+    <base-config cleartextTrafficPermitted="true" />
+</network-security-config>

@@ -129,6 +129,12 @@
     <string name="direct_file_type">File type: %1$s</string>
     <string name="direct_file_size">File size: %1$s</string>
     <string name="direct_file_size_unknown">Unknown</string>
+    <string name="http_download_warning_title">Unencrypted HTTP link</string>
+    <string name="http_download_warning_message">This link to %1$s uses HTTP, so someone on the network may observe or change the transfer. Nazelha will not send saved cookies or login credentials. Continue only if you trust this specific link; approval applies to this download only.</string>
+    <string name="http_download_continue">Continue with HTTP</string>
+    <string name="http_video_extractor_unsupported">For safety, HTTP pages that need yt-dlp or custom commands are not supported. Use an HTTPS page or select a direct file link.</string>
+    <string name="unsupported_url_scheme">Only HTTP and HTTPS download links are supported. File, content, JavaScript, and intent links are blocked.</string>
+    <string name="http_resume_requires_app">Open Nazelha and confirm this HTTP download before resuming.</string>
     <string name="web_page_links_title">Files found on this page</string>
     <string name="web_page_links_description">Choose a link to preview it. Nothing is downloaded until you confirm.</string>
     <string name="web_page_link_source">Source: %1$s</string>
@@ -270,6 +276,7 @@
     <string name="generate_new_cookies">Generate new cookies</string>
     <string name="use_cookies">Use Cookies</string>
     <string name="remove_cookie_profile_desc">Remove this entry for \"%1$s\"? Please note that the cookies stored for this site will not be cleared.</string>
+    <string name="cookie_profile_https_required">Cookie profiles require a valid HTTPS website to protect your sign-in cookies.</string>
     <string name="custom_command_enabled_hint">Some options are unavailable when using custom command</string>
     <string name="how_does_it_work">How does it work?</string>
     <string name="cookies_usage_msg">Downloading from some sites requires account authentication information. Click \"Generate new cookies\", enter the URL of the website and then log in with your account in the browser page, the app will generate it for you.</string>

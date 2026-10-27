@@ -5,9 +5,11 @@ import android.content.ClipData
 import android.content.Context
 import android.content.Intent
 import android.util.Log
+import android.widget.Toast
 import com.snapnet.App.Companion.context
 import com.snapnet.download.DownloaderV2
 import com.snapnet.download.Task.DownloadState.Running
+import com.snapnet.download.http.HttpDownloadSecurityPolicy
 import com.snapnet.util.NotificationUtil
 import com.snapnet.util.ToastUtil
 import com.yausername.youtubedl_android.YoutubeDL
@@ -76,7 +78,24 @@ class NotificationActionReceiver : BroadcastReceiver(), KoinComponent {
             ACTION_RESUME_TASK -> {
                 val taskId = intent.getStringExtra(TASK_ID_KEY)
                 if (!taskId.isNullOrEmpty()) {
-                    val resumed = downloader.restart(taskId) || Downloader.resumeDownload(taskId)
+                    val queuedTask = downloader.getTaskStateMap().keys.find { it.id == taskId }
+                    if (
+                        queuedTask != null &&
+                            HttpDownloadSecurityPolicy.requiresUserConfirmation(queuedTask.url)
+                    ) {
+                        context?.let {
+                            Toast.makeText(
+                                    it,
+                                    it.getString(R.string.http_resume_requires_app),
+                                    Toast.LENGTH_LONG,
+                                )
+                                .show()
+                        }
+                        return
+                    }
+                    val resumed =
+                        if (queuedTask != null) downloader.restart(taskId)
+                        else Downloader.resumeDownload(taskId)
                     if (resumed) NotificationUtil.cancelNotification(notificationId)
                     Log.d(TAG, "resume request accepted=$resumed")
                 }
