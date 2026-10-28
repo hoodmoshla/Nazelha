@@ -55,7 +55,7 @@ run_gradle() {
 }
 
 # Compose UI tests use test-only Compose/Kotlin APIs. Run the UI target without R8;
-# the separate validation job builds, signs, verifies, and profiles the minified preview APK.
+# release tags additionally install and launch the separately built minified distribution APK.
 echo "Running Android UI instrumentation on the unminified Debug target."
 timeout 15s adb logcat -c || true
 run_gradle ui-tests \
@@ -73,4 +73,46 @@ capture_diagnostics
 printf 'UI instrumentation exit code: %s\n' "$ui_status"
 grep -E '^Starting [0-9]+ tests|^Finished [0-9]+ tests|^BUILD (SUCCESSFUL|FAILED)' android-test-diagnostics/gradle-ui-tests.log || true
 tail -n 140 android-test-diagnostics/gradle-ui-tests.log
+smoke_status=0
+if [ "$ui_status" -eq 0 ] && [[ "${GITHUB_REF:-}" == refs/tags/nazelha-preview-v* ]]; then
+  candidate_apk=$(find preview-candidate -type f -name '*.apk' -print -quit)
+  if [ -z "$candidate_apk" ]; then
+    echo 'Signed preview APK artifact is missing from preview-candidate.' >&2
+    smoke_status=4
+    printf 'APK_MISSING=true\nSMOKE_EXIT=%s\n' "$smoke_status" > android-test-diagnostics/preview-install-summary.txt
+  else
+    install_status=0
+    launch_status=0
+    adb uninstall com.snapnet.preview.debug >/dev/null 2>&1 || true
+    adb uninstall com.snapnet.preview.debug.test >/dev/null 2>&1 || true
+    timeout 45s adb install "$candidate_apk" > android-test-diagnostics/preview-install.log 2>&1
+    install_status=$?
+    smoke_status=$install_status
+    if [ "$install_status" -eq 0 ]; then
+      timeout 20s adb shell monkey -p com.snapnet.preview.debug 1 > android-test-diagnostics/preview-launch.log 2>&1
+      launch_status=$?
+      smoke_status=$launch_status
+    fi
+    if [ "$smoke_status" -eq 0 ]; then
+      sleep 5
+      pid=$(adb shell pidof com.snapnet.preview.debug 2>/dev/null | tr -d '\r' | awk '{print $1}')
+      if [ -z "$pid" ]; then
+        echo 'Signed preview app did not remain running after launch.' >&2
+        smoke_status=5
+      else
+        timeout 15s adb logcat -d --pid="$pid" -s AndroidRuntime:E > android-test-diagnostics/preview-runtime-errors.log 2>&1 || true
+        if grep -q 'FATAL EXCEPTION' android-test-diagnostics/preview-runtime-errors.log; then
+          echo 'Signed preview app reported a fatal runtime exception.' >&2
+          smoke_status=6
+        fi
+      fi
+    fi
+    printf 'APK=%s\nINSTALL_EXIT=%s\nLAUNCH_EXIT=%s\nSMOKE_EXIT=%s\n' "$candidate_apk" "$install_status" "$launch_status" "$smoke_status" > android-test-diagnostics/preview-install-summary.txt
+  fi
+  if [ "$smoke_status" -ne 0 ]; then
+    capture_diagnostics
+    exit "$smoke_status"
+  fi
+  echo 'Signed preview distribution installed and remained running on the API 35 emulator.'
+fi
 exit "$ui_status"

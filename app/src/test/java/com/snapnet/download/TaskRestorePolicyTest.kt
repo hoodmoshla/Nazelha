@@ -11,6 +11,7 @@ import com.snapnet.download.Task.RestartableAction.Download
 import com.snapnet.download.Task.RestartableAction.FetchInfo
 import com.snapnet.download.Task.TypeInfo
 import com.snapnet.download.http.DirectHttpFile
+import com.snapnet.download.http.HttpDownloadSecurityPolicy
 import com.snapnet.util.DownloadUtil
 import com.snapnet.util.Format
 import com.snapnet.util.VideoInfo
@@ -39,6 +40,35 @@ class TaskRestorePolicyTest {
             Canceled(action = Download, progress = 0.4f, paused = true, progressText = "4 MB"),
             TaskRestorePolicy.restore(task, state).downloadState,
         )
+    }
+
+    @Test
+    fun `restored HTTP tasks stay paused and only direct files can retry with fresh consent`() {
+        val directUrl = "http://example.com/file.bin"
+        val directTask = Task(directUrl, TypeInfo.DirectHttpFile, preferences)
+        val directFile = DirectHttpFile(directUrl, "file.bin", "application/octet-stream")
+        val restoredDirect =
+            TaskRestorePolicy.restore(
+                directTask,
+                state(directTask, Running(taskId = directTask.id), directHttpFile = directFile),
+            )
+
+        assertEquals(Canceled(action = Download, paused = true), restoredDirect.downloadState)
+        assertFalse(HttpDownloadSecurityPolicy.mayStartTask(directUrl, true, false))
+        assertTrue(HttpDownloadSecurityPolicy.mayStartTask(directUrl, true, true))
+
+        val legacyUrl = "http://example.com/video"
+        val legacyTask = Task(legacyUrl, TypeInfo.URL, preferences)
+        val info = VideoInfo(id = "legacy", title = "Legacy video", webpageUrl = legacyUrl)
+        val restoredLegacy =
+            TaskRestorePolicy.restore(
+                legacyTask,
+                state(legacyTask, Running(taskId = legacyTask.id), videoInfo = info),
+            )
+
+        assertEquals(Canceled(action = Download, paused = true), restoredLegacy.downloadState)
+        assertFalse(HttpDownloadSecurityPolicy.mayStartTask(legacyUrl, false, true))
+        assertFalse(HttpDownloadSecurityPolicy.mayUseYtDlp(legacyUrl))
     }
 
     @Test

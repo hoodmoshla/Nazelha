@@ -133,7 +133,8 @@
     <string name="share_fail_msg">تعذر مطابقة عنوان URL من المحتوى المشترك</string>
     <string name="share_success_msg">جارٍ قراءة رابط الفيديو من المحتوى المشترك …</string>
     <string name="http_download_warning_title">رابط HTTP غير مشفر</string>
-    <string name="http_download_warning_message">يستخدم هذا الرابط إلى %1$s اتصال HTTP غير مشفر؛ قد يتمكن أحد على الشبكة من مراقبة النقل أو تغييره. لن يرسل نزّلها ملفات cookies أو بيانات دخول محفوظة. تابع فقط إن كنت تثق بهذا الرابط المحدد؛ والموافقة لهذا التنزيل وحده.</string>
+    <string name="http_download_warning_message">يستخدم هذا الرابط إلى %1$s اتصال HTTP غير مشفر؛ قد يتمكن أحد على الشبكة من مراقبة النقل أو تغييره. لن يرسل نزّلها ملفات cookies أو بيانات الدخول المحفوظة، ويحظر أسماء معلمات الرابط الشائعة لبيانات الاعتماد. لا تستخدم HTTP لأي رابط يحتوي سرًا؛ استخدم HTTPS. تابع فقط إن كنت تثق بهذا الرابط المحدد؛ والموافقة لهذا التنزيل وحده.</string>
+    <string name="http_credentials_in_url_blocked">يبدو أن رابط HTTP يحتوي رمز وصول أو مفتاحًا أو كلمة مرور ضمن معلمات الرابط؛ حُظر لمنع إرسالها دون تشفير. استخدم رابط HTTPS أو رابطًا بلا بيانات اعتماد.</string>
     <string name="http_download_continue">المتابعة عبر HTTP</string>
     <string name="http_video_extractor_unsupported">لأسباب أمنية، لا ندعم صفحات HTTP التي تحتاج إلى yt-dlp أو أوامر مخصصة. استخدم صفحة HTTPS أو اختر رابط ملف مباشر.</string>
     <string name="unsupported_url_scheme">تُقبل روابط HTTP وHTTPS فقط. تُحظر روابط file وcontent وJavaScript وintent.</string>

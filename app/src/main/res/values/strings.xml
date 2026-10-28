@@ -130,7 +130,8 @@
     <string name="direct_file_size">File size: %1$s</string>
     <string name="direct_file_size_unknown">Unknown</string>
     <string name="http_download_warning_title">Unencrypted HTTP link</string>
-    <string name="http_download_warning_message">This link to %1$s uses HTTP, so someone on the network may observe or change the transfer. Nazelha will not send saved cookies or login credentials. Continue only if you trust this specific link; approval applies to this download only.</string>
+    <string name="http_download_warning_message">This link to %1$s uses HTTP, so someone on the network may observe or change the transfer. Nazelha will not send saved cookies or login credentials and blocks common credential-like query names. Do not use HTTP for any URL containing a secret; use HTTPS instead. Continue only if you trust this specific link; approval applies to this download only.</string>
+    <string name="http_credentials_in_url_blocked">This HTTP link appears to include a token, key, password, or other credential in its query string. It is blocked because that value would be sent without encryption. Use HTTPS or a link without credentials.</string>
     <string name="http_download_continue">Continue with HTTP</string>
     <string name="http_video_extractor_unsupported">For safety, HTTP pages that need yt-dlp or custom commands are not supported. Use an HTTPS page or select a direct file link.</string>
     <string name="unsupported_url_scheme">Only HTTP and HTTPS download links are supported. File, content, JavaScript, and intent links are blocked.</string>

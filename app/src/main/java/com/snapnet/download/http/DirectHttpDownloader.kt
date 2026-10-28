@@ -228,6 +228,9 @@ class DirectHttpDownloader(private val client: OkHttpClient = DirectHttpClientPr
         if (current.scheme != "http" && current.scheme != "https") {
             throw IOException("Only HTTP(S) download URLs are supported")
         }
+        if (HttpDownloadSecurityPolicy.hasCleartextCredentials(current.toString())) {
+            throw IOException("Credentials in HTTP URLs are not supported")
+        }
         if (current.username.isNotEmpty() || current.password.isNotEmpty()) {
             throw IOException("Credentials in URLs are not supported")
         }

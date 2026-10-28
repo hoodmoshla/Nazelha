@@ -33,6 +33,9 @@ class DirectHttpLinkResolver(private val client: OkHttpClient = DirectHttpClient
     ): DirectHttpFile? {
         val original = url.trim().toHttpUrlOrNull() ?: return null
         if (original.scheme != "http" && original.scheme != "https") return null
+        if (HttpDownloadSecurityPolicy.hasCleartextCredentials(original.toString())) {
+            throw IOException("Credentials in HTTP URLs are not supported")
+        }
         if (original.username.isNotEmpty() || original.password.isNotEmpty()) {
             throw IOException("Credentials in URLs are not supported")
         }
@@ -78,6 +81,9 @@ class DirectHttpLinkResolver(private val client: OkHttpClient = DirectHttpClient
     fun discoverPageDownloads(url: String, taskKey: String? = null): List<DiscoveredDownloadLink> {
         val original = url.trim().toHttpUrlOrNull() ?: return emptyList()
         if (original.scheme != "http" && original.scheme != "https") return emptyList()
+        if (HttpDownloadSecurityPolicy.hasCleartextCredentials(original.toString())) {
+            throw IOException("Credentials in HTTP URLs are not supported")
+        }
         if (original.username.isNotEmpty() || original.password.isNotEmpty()) {
             throw IOException("Credentials in URLs are not supported")
         }

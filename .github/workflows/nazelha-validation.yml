@@ -14,6 +14,9 @@ on:
 permissions:
   contents: read
 
+env:
+  NAZELHA_EXPECTED_RELEASE_CERT_SHA256: "87d073044514598d52a66c5c6351d16c110b1b39ac31caa3b7e711c1856ca99d"
+
 concurrency:
   group: nazelha-validation-${{ github.ref }}
   cancel-in-progress: true
@@ -57,7 +60,7 @@ jobs:
           "-Dorg.gradle.jvmargs=-Xmx3g -Dfile.encoding=UTF-8"
           --stacktrace
 
-      - name: Verify preview identity, ABI, version, signing, and size profile
+      - name: Verify debug validation APK identity, ABI, and size profile
         shell: bash
         run: |
           set -euo pipefail
@@ -66,7 +69,7 @@ jobs:
           "$tools/apksigner" verify --verbose --print-certs "$apk" | tee apk-verification.txt
           "$tools/aapt" dump badging "$apk" >> apk-verification.txt
           grep -q "package: name='com.snapnet.preview.debug'" apk-verification.txt
-          grep -q "versionCode='100070402' versionName='1.0.7-debug'" apk-verification.txt
+          grep -q "versionCode='100080402' versionName='1.0.8-debug'" apk-verification.txt
           grep -q "application-label:'نزّلها — فيديو وملفات'" apk-verification.txt
           grep -Eq 'certificate SHA-256 digest: [[:xdigit:]]{64}$' apk-verification.txt
           test -s app/build/outputs/mapping/githubPreviewDebug/mapping.txt
@@ -126,17 +129,182 @@ jobs:
           PY
           sha256sum "$apk" > "$apk.sha256"
 
-      - name: Retain the preview APK and verification reports
+      - name: Prepare the persistent Nazelha preview signing key
+        if: startsWith(github.ref, 'refs/tags/nazelha-preview-v')
+        shell: bash
+        env:
+          NAZELHA_SIGNING_KEYSTORE_BASE64: ${{ secrets.NAZELHA_RELEASE_KEYSTORE_BASE64 }}
+        run: |
+          set -euo pipefail
+          test -n "$NAZELHA_SIGNING_KEYSTORE_BASE64"
+          keystore="$RUNNER_TEMP/nazelha-preview-release.jks"
+          printf '%s' "$NAZELHA_SIGNING_KEYSTORE_BASE64" | base64 --decode > "$keystore"
+          chmod 600 "$keystore"
+          test -s "$keystore"
+          printf 'NAZELHA_KEYSTORE_FILE=%s\n' "$keystore" >> "$GITHUB_ENV"
+
+      - name: Build minified signed ARM64 preview distribution
+        if: startsWith(github.ref, 'refs/tags/nazelha-preview-v')
+        env:
+          NAZELHA_STORE_PASSWORD: ${{ secrets.NAZELHA_RELEASE_STORE_PASSWORD }}
+          NAZELHA_KEY_ALIAS: ${{ secrets.NAZELHA_RELEASE_KEY_ALIAS }}
+          NAZELHA_KEY_PASSWORD: ${{ secrets.NAZELHA_RELEASE_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          test -n "$NAZELHA_STORE_PASSWORD"
+          test -n "$NAZELHA_KEY_ALIAS"
+          test -n "$NAZELHA_KEY_PASSWORD"
+          ./gradlew \
+            :app:assembleGithubPreviewDistribution \
+            -PnoSplits \
+            -PABI_FILTERS=arm64-v8a \
+            -PnazelhaRequirePreviewSigning=true \
+            --no-daemon \
+            --no-configuration-cache \
+            "-Dorg.gradle.jvmargs=-Xmx3g -Dfile.encoding=UTF-8" \
+            --stacktrace
+
+      - name: Verify signed ARM64 preview distribution identity, certificate, and size
+        if: startsWith(github.ref, 'refs/tags/nazelha-preview-v')
+        shell: bash
+        run: |
+          set -euo pipefail
+          apk=$(find app/build/outputs/apk/githubPreview/distribution -name '*.apk' -print -quit)
+          test -s "$apk"
+          tools="$ANDROID_HOME/build-tools/$(ls "$ANDROID_HOME/build-tools" | sort -V | tail -1)"
+          "$tools/apksigner" verify --verbose --print-certs "$apk" > preview-verification.txt
+          debuggable=$("$ANDROID_HOME/cmdline-tools/latest/bin/apkanalyzer" manifest debuggable "$apk")
+          test "$debuggable" = "false"
+          printf 'APK debuggable: %s\n' "$debuggable" >> preview-verification.txt
+          "$tools/aapt" dump badging "$apk" >> preview-verification.txt
+          grep -q "package: name='com.snapnet.preview.debug'" preview-verification.txt
+          grep -q "versionCode='100080402' versionName='1.0.8-preview'" preview-verification.txt
+          grep -q "application-label:'نزّلها — فيديو وملفات'" preview-verification.txt
+          digest_line=$(grep -i -m1 'certificate SHA-256 digest:' preview-verification.txt)
+          digest=${digest_line#*digest: }
+          digest=${digest//:/}
+          digest=$(printf '%s' "$digest" | tr '[:upper:]' '[:lower:]')
+          [[ "$digest" =~ ^[0-9a-f]{64}$ ]]
+          test "$digest" = "$NAZELHA_EXPECTED_RELEASE_CERT_SHA256"
+          printf 'Verified certificate SHA-256 (normalized): %s\n' "$digest" >> preview-verification.txt
+          test -s app/build/outputs/mapping/githubPreviewDistribution/mapping.txt
+          python3 - "$apk" <<'PY'
+          import collections, hashlib, json, os, sys, zipfile
+          apk=sys.argv[1]
+          with zipfile.ZipFile(apk) as z:
+              entries=[i for i in z.infolist() if not i.is_dir()]
+              abis=sorted({p.split('/')[1] for p in z.namelist() if p.startswith('lib/') and p.endswith('.so')})
+              assert abis == ['arm64-v8a'], abis
+              components=collections.defaultdict(int)
+              for i in entries:
+                  if i.filename.startswith('lib/'):
+                      component='native_libraries'
+                  elif i.filename.endswith('.dex'):
+                      component='dex'
+                  elif i.filename == 'resources.arsc':
+                      component='resource_table'
+                  elif i.filename.startswith('res/'):
+                      component='res_resources'
+                  else:
+                      component='other'
+                  components[component] += i.compress_size
+          digest=hashlib.sha256()
+          with open(apk,'rb') as source:
+              for chunk in iter(lambda: source.read(1024*1024), b''):
+                  digest.update(chunk)
+          apk_bytes=os.path.getsize(apk)
+          report={
+              'apk': os.path.basename(apk),
+              'apk_bytes': apk_bytes,
+              'sha256': digest.hexdigest(),
+              'abi': abis,
+              'baseline_v1_0_7_bytes': 70407516,
+              'size_change_vs_v1_0_7_bytes': apk_bytes-70407516,
+              'components_compressed_bytes': dict(sorted(components.items())),
+          }
+          with open('preview-apk-size-profile.json','w') as output:
+              json.dump(report,output,indent=2)
+              output.write('\n')
+          print(json.dumps(report,indent=2))
+          PY
+          sha256sum "$apk" > "$apk.sha256"
+
+      - name: Retain the verified preview distribution APK and reports
         if: startsWith(github.ref, 'refs/tags/nazelha-preview-v')
         uses: actions/upload-artifact@v4
         with:
-          name: Nazelha-preview-arm64-debug
+          name: Nazelha-preview-arm64-distribution
           path: |
-            app/build/outputs/apk/githubPreview/debug/*.apk
-            app/build/outputs/apk/githubPreview/debug/*.sha256
-            app/build/outputs/mapping/githubPreviewDebug/mapping.txt
-            apk-verification.txt
-            apk-size-profile.json
+            app/build/outputs/apk/githubPreview/distribution/*.apk
+            app/build/outputs/apk/githubPreview/distribution/*.sha256
+            app/build/outputs/mapping/githubPreviewDistribution/mapping.txt
+            preview-verification.txt
+            preview-apk-size-profile.json
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Build minified signed x86_64 preview for emulator install smoke test
+        if: startsWith(github.ref, 'refs/tags/nazelha-preview-v')
+        env:
+          NAZELHA_STORE_PASSWORD: ${{ secrets.NAZELHA_RELEASE_STORE_PASSWORD }}
+          NAZELHA_KEY_ALIAS: ${{ secrets.NAZELHA_RELEASE_KEY_ALIAS }}
+          NAZELHA_KEY_PASSWORD: ${{ secrets.NAZELHA_RELEASE_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          test -n "$NAZELHA_STORE_PASSWORD"
+          test -n "$NAZELHA_KEY_ALIAS"
+          test -n "$NAZELHA_KEY_PASSWORD"
+          ./gradlew \
+            :app:assembleGithubPreviewDistribution \
+            -PnoSplits \
+            -PABI_FILTERS=x86_64 \
+            -PnazelhaRequirePreviewSigning=true \
+            --no-daemon \
+            --no-configuration-cache \
+            "-Dorg.gradle.jvmargs=-Xmx3g -Dfile.encoding=UTF-8" \
+            --stacktrace
+
+      - name: Verify signed x86_64 emulator install candidate
+        if: startsWith(github.ref, 'refs/tags/nazelha-preview-v')
+        shell: bash
+        run: |
+          set -euo pipefail
+          apk=$(find app/build/outputs/apk/githubPreview/distribution -maxdepth 1 -type f -name '*.apk' -print -quit)
+          test -s "$apk"
+          tools="$ANDROID_HOME/build-tools/$(ls "$ANDROID_HOME/build-tools" | sort -V | tail -1)"
+          "$tools/apksigner" verify --verbose --print-certs "$apk" > x86_64-install-smoke-verification.txt
+          debuggable=$("$ANDROID_HOME/cmdline-tools/latest/bin/apkanalyzer" manifest debuggable "$apk")
+          test "$debuggable" = "false"
+          printf 'APK debuggable: %s\n' "$debuggable" >> x86_64-install-smoke-verification.txt
+          "$tools/aapt" dump badging "$apk" >> x86_64-install-smoke-verification.txt
+          grep -q "package: name='com.snapnet.preview.debug'" x86_64-install-smoke-verification.txt
+          grep -q "versionCode='100080404' versionName='1.0.8-preview'" x86_64-install-smoke-verification.txt
+          digest_line=$(grep -i -m1 'certificate SHA-256 digest:' x86_64-install-smoke-verification.txt)
+          digest=${digest_line#*digest: }
+          digest=${digest//:/}
+          digest=$(printf '%s' "$digest" | tr '[:upper:]' '[:lower:]')
+          [[ "$digest" =~ ^[0-9a-f]{64}$ ]]
+          test "$digest" = "$NAZELHA_EXPECTED_RELEASE_CERT_SHA256"
+          printf 'Verified certificate SHA-256 (normalized): %s\n' "$digest" >> x86_64-install-smoke-verification.txt
+          python3 - "$apk" <<'PY'
+          import sys, zipfile
+          with zipfile.ZipFile(sys.argv[1]) as z:
+              abis=sorted({p.split('/')[1] for p in z.namelist() if p.startswith('lib/') and p.endswith('.so')})
+          assert abis == ['x86_64'], abis
+          PY
+          smoke_apk="$(dirname "$apk")/Nazelha-1.0.8-x86_64-distribution.apk"
+          if [[ "$apk" != "$smoke_apk" ]]; then cp -- "$apk" "$smoke_apk"; fi
+          sha256sum "$smoke_apk" > "$smoke_apk.sha256"
+
+      - name: Retain x86_64 install-smoke APK (not a release asset)
+        if: startsWith(github.ref, 'refs/tags/nazelha-preview-v')
+        uses: actions/upload-artifact@v4
+        with:
+          name: Nazelha-preview-x86_64-install-smoke
+          path: |
+            app/build/outputs/apk/githubPreview/distribution/*x86_64-distribution.apk
+            app/build/outputs/apk/githubPreview/distribution/*x86_64-distribution.apk.sha256
+            x86_64-install-smoke-verification.txt
           if-no-files-found: error
           retention-days: 14
 
@@ -151,10 +319,15 @@ jobs:
             app/build/test-results/testGithubPreviewDebugUnitTest/**/*.xml
             app/build/reports/lint-results-githubPreviewDebug.html
             app/build/reports/lint-results-githubPreviewDebug.xml
+            preview-verification.txt
+            preview-apk-size-profile.json
+            x86_64-install-smoke-verification.txt
           if-no-files-found: warn
           retention-days: 14
 
   android-tests:
+    needs:
+      - test-and-build
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     steps:
@@ -170,6 +343,13 @@ jobs:
 
       - name: Set up Android SDK
         uses: android-actions/setup-android@v4
+
+      - name: Download signed preview candidate for install smoke test
+        if: startsWith(github.ref, 'refs/tags/nazelha-preview-v')
+        uses: actions/download-artifact@v4
+        with:
+          name: Nazelha-preview-x86_64-install-smoke
+          path: preview-candidate
 
       - name: Grant the ephemeral runner access to KVM
         run: |
@@ -218,7 +398,7 @@ jobs:
       - name: Download the verified ARM64 APK artifact
         uses: actions/download-artifact@v4
         with:
-          name: Nazelha-preview-arm64-debug
+          name: Nazelha-preview-arm64-distribution
           path: release-assets
 
       - name: Flatten and verify APK for release
@@ -233,13 +413,15 @@ jobs:
           expected_sha="$(awk 'NR == 1 { print $1 }' "$source_checksum")"
           actual_sha="$(sha256sum "$source_apk" | awk 'NR == 1 { print $1 }')"
           test "$expected_sha" = "$actual_sha"
-          test -s release-assets/apk-size-profile.json
-          test -s release-assets/apk-verification.txt
-          grep -q "Verified using v2 scheme (APK Signature Scheme v2): true" release-assets/apk-verification.txt
-          grep -q "package: name='com.snapnet.preview.debug'" release-assets/apk-verification.txt
-          grep -q "versionCode='100070402' versionName='1.0.7-debug'" release-assets/apk-verification.txt
-          grep -q "application-label:'نزّلها — فيديو وملفات'" release-assets/apk-verification.txt
-          python3 - "$source_apk" release-assets/apk-size-profile.json <<'PY'
+          test -s release-assets/preview-apk-size-profile.json
+          test -s release-assets/preview-verification.txt
+          grep -q "Verified using v2 scheme (APK Signature Scheme v2): true" release-assets/preview-verification.txt
+          grep -Fxq 'APK debuggable: false' release-assets/preview-verification.txt
+          grep -q "package: name='com.snapnet.preview.debug'" release-assets/preview-verification.txt
+          grep -q "versionCode='100080402' versionName='1.0.8-preview'" release-assets/preview-verification.txt
+          grep -q "application-label:'نزّلها — فيديو وملفات'" release-assets/preview-verification.txt
+          grep -Fxq "Verified certificate SHA-256 (normalized): $NAZELHA_EXPECTED_RELEASE_CERT_SHA256" release-assets/preview-verification.txt
+          python3 - "$source_apk" release-assets/preview-apk-size-profile.json <<'PY'
           import hashlib, json, os, sys
           apk, report_path = sys.argv[1:]
           with open(report_path, encoding='utf-8') as f:
@@ -271,10 +453,10 @@ jobs:
           name: Nazelha preview ${{ github.ref_name }}
           prerelease: true
           body: |
-            **ملاحظة التثبيت:** هذا الإصدار يستخدم شهادة Debug جديدة، لذلك لا يقبل التحديث فوق Nazelha 1.0.6. صدّر أي بيانات داخلية تحتاجها قبل إزالة الإصدار السابق وتثبيت هذا APK. لم تُحذف ملفات أو تقارير 1.0.6.
+            **ملاحظة التثبيت:** هذا الإصدار يبدأ مفتاح توقيع Nazelha Preview ثابتًا جديدًا، لذلك لا يقبل التحديث المباشر فوق 1.0.7. صدّر بياناتك المهمة ثم أزل الإصدار 1.0.7 وثبّت هذا الإصدار؛ إزالة التطبيق قد تحذف بياناته المحلية. إصدارات Preview اللاحقة ستستخدم الشهادة نفسها لتحديث هذا الإصدار وما بعده.
           generate_release_notes: true
           files: |
             release-assets/*.apk
             release-assets/*.sha256
-            release-assets/apk-verification.txt
-            release-assets/apk-size-profile.json
+            release-assets/preview-verification.txt
+            release-assets/preview-apk-size-profile.json

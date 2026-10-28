@@ -10,7 +10,9 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import okhttp3.CookieJar
+import okhttp3.Dns
 import okhttp3.OkHttpClient
+import okhttp3.Request
 import org.junit.After
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
@@ -91,6 +93,57 @@ class DirectHttpTransferTest {
     }
 
     @Test
+    fun productionDirectHttpClientDoesNotStoreOrSendCookiesOrAuthorization() {
+        val client = DirectHttpClientProvider.create().newBuilder().dns(Dns.SYSTEM).build()
+        val productionResolver = DirectHttpLinkResolver(client)
+        val productionDownloader = DirectHttpDownloader(client)
+        val payload = "file".toByteArray()
+        val requests = java.util.concurrent.CopyOnWriteArrayList<TestHttpRequest>()
+        server.createContext("/seed-cookie") { _, output ->
+            server.respond(
+                output,
+                200,
+                headers = mapOf("Set-Cookie" to "session=secret; Path=/"),
+                contentLength = 0L,
+            )
+        }
+        server.createContext("/public.bin") { request, output ->
+            requests += request
+            val headers =
+                mapOf(
+                    "Content-Type" to "application/octet-stream",
+                    "Content-Disposition" to "attachment; filename=public.bin",
+                    "Content-Length" to payload.size.toString(),
+                )
+            if (request.method == "HEAD") {
+                server.respond(output, 200, headers = headers, contentLength = null)
+            } else {
+                server.respond(output, 200, headers = headers, body = payload)
+            }
+        }
+        val baseUrl = server.url("")
+
+        client.newCall(Request.Builder().url("$baseUrl/seed-cookie").build()).execute().use {
+            assertTrue(it.isSuccessful)
+        }
+        val file = productionResolver.resolve("$baseUrl/public.bin")
+
+        assertNotNull(file)
+        productionDownloader.download(
+            "cookie-free-task",
+            file!!,
+            File(tempDirectory, "public.part"),
+        ) { _, _ ->
+        }
+
+        assertArrayEquals(payload, File(tempDirectory, "public.part").readBytes())
+        assertTrue(requests.any { it.method == "HEAD" })
+        assertTrue(requests.any { it.method == "GET" })
+        assertTrue(requests.all { it.header("Cookie") == null })
+        assertTrue(requests.all { it.header("Authorization") == null })
+    }
+
+    @Test
     fun htmlPagesStayOnExistingVideoExtractorPath() {
         server.createContext("/article") { _, output ->
             server.respond(
@@ -131,6 +184,37 @@ class DirectHttpTransferTest {
         assertEquals("Manual", candidates.single().label)
         assertTrue(candidates.single().url.contains("token=secret"))
         assertEquals(0, candidateRequests.get())
+    }
+
+    @Test
+    fun metaRefreshPageDoesNotFollowOrFetchItsTarget() {
+        val metaRefresh =
+            "<html><head><meta http-equiv=\"refresh\" content=\"0; url='/target.bin'\"></head></html>"
+                .toByteArray()
+        val targetRequests = AtomicInteger()
+        server.createContext("/meta-refresh") { request, output ->
+            server.respond(
+                output,
+                200,
+                headers = mapOf("Content-Type" to "text/html; charset=utf-8"),
+                body = if (request.method == "GET") metaRefresh else byteArrayOf(),
+                contentLength = metaRefresh.size.toLong(),
+            )
+        }
+        server.createContext("/target.bin") { _, output ->
+            targetRequests.incrementAndGet()
+            server.respond(
+                output,
+                200,
+                headers = mapOf("Content-Type" to "application/octet-stream"),
+            )
+        }
+
+        val page = server.url("/meta-refresh")
+
+        assertNull(resolver.resolve(page))
+        assertTrue(resolver.discoverPageDownloads(page, "meta-refresh-task").isEmpty())
+        assertEquals(0, targetRequests.get())
     }
 
     @Test
@@ -334,18 +418,14 @@ class DirectHttpTransferTest {
                     headers =
                         mapOf(
                             "ETag" to "\"v2\"",
-                            "Content-Range" to "bytes $offset-${newBytes.lastIndex}/${newBytes.size}",
+                            "Content-Range" to
+                                "bytes $offset-${newBytes.lastIndex}/${newBytes.size}",
                         ),
                     body = newBytes.copyOfRange(offset, newBytes.size),
                 )
             } else {
                 freshRequests.incrementAndGet()
-                server.respond(
-                    output,
-                    200,
-                    headers = mapOf("ETag" to "\"v2\""),
-                    body = newBytes,
-                )
+                server.respond(output, 200, headers = mapOf("ETag" to "\"v2\""), body = newBytes)
             }
         }
         val partial = File(tempDirectory, "changed-range.part")
@@ -376,7 +456,8 @@ class DirectHttpTransferTest {
             "unbound-task",
             directFile(server.url("/unbound.bin"), etag = "\"new\""),
             partial,
-        ) { _, _ -> }
+        ) { _, _ ->
+        }
 
         assertArrayEquals(replacement, partial.readBytes())
     }

@@ -338,7 +338,9 @@ private fun ErrorPage(modifier: Modifier = Modifier, state: Error, onActionPost:
         )
 
         Row(modifier = Modifier) {
-            FilledTonalButton(onClick = { onActionPost(state.action) }) { Text("Retry") }
+            FilledTonalButton(onClick = { onActionPost(state.action.withHttpConsentFlag(false)) }) {
+                Text("Retry")
+            }
             Spacer(Modifier.width(8.dp))
             Button(
                 onClick = {

@@ -26,6 +26,20 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
+internal fun DownloadDialogViewModel.Action.withHttpConsentFlag(
+    granted: Boolean
+): DownloadDialogViewModel.Action =
+    when (this) {
+        is DownloadDialogViewModel.Action.ProceedWithURLs -> copy(httpConsentGranted = granted)
+        is DownloadDialogViewModel.Action.FetchPlaylist -> copy(httpConsentGranted = granted)
+        is DownloadDialogViewModel.Action.FetchFormats -> copy(httpConsentGranted = granted)
+        is DownloadDialogViewModel.Action.DownloadWithPreset -> copy(httpConsentGranted = granted)
+        is DownloadDialogViewModel.Action.RunCommand -> copy(httpConsentGranted = granted)
+        is DownloadDialogViewModel.Action.EnqueueDirectHttpFile ->
+            copy(httpConsentGranted = granted)
+        else -> this
+    }
+
 class DownloadDialogViewModel(private val downloader: DownloaderV2) : ViewModel() {
 
     private val directHttpResolver = DirectHttpLinkResolver()
@@ -162,7 +176,13 @@ class DownloadDialogViewModel(private val downloader: DownloaderV2) : ViewModel(
             pendingHttpAction = null
             pendingHttpUrls = emptyList()
             confirmedHttpUrls.clear()
-            mSheetStateFlow.update { SheetState.UnsupportedUrl(R.string.unsupported_url_scheme) }
+            val messageRes =
+                if (HttpDownloadSecurityPolicy.hasCleartextCredentials(invalidUrl)) {
+                    R.string.http_credentials_in_url_blocked
+                } else {
+                    R.string.unsupported_url_scheme
+                }
+            mSheetStateFlow.update { SheetState.UnsupportedUrl(messageRes) }
             mSheetValueFlow.update { SheetValue.Expanded }
             return
         }
@@ -267,16 +287,7 @@ class DownloadDialogViewModel(private val downloader: DownloaderV2) : ViewModel(
             else -> false
         }
 
-    private fun Action.withHttpConsent(): Action =
-        when (this) {
-            is Action.ProceedWithURLs -> copy(httpConsentGranted = true)
-            is Action.FetchPlaylist -> copy(httpConsentGranted = true)
-            is Action.FetchFormats -> copy(httpConsentGranted = true)
-            is Action.DownloadWithPreset -> copy(httpConsentGranted = true)
-            is Action.RunCommand -> copy(httpConsentGranted = true)
-            is Action.EnqueueDirectHttpFile -> copy(httpConsentGranted = true)
-            else -> this
-        }
+    private fun Action.withHttpConsent(): Action = withHttpConsentFlag(granted = true)
 
     private fun proceedWithUrls(action: Action.ProceedWithURLs) {
         if (action.urlList.size != 1) {

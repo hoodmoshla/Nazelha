@@ -20,6 +20,22 @@ val abiCodes = mapOf("armeabi-v7a" to 1, "arm64-v8a" to 2, "x86" to 3, "x86_64" 
 
 val baseVersionName = currentVersion.name
 val currentVersionCode = currentVersion.code.toInt()
+val previewSigningEnvironment =
+    mapOf(
+        "NAZELHA_KEYSTORE_FILE" to providers.environmentVariable("NAZELHA_KEYSTORE_FILE").orNull,
+        "NAZELHA_STORE_PASSWORD" to providers.environmentVariable("NAZELHA_STORE_PASSWORD").orNull,
+        "NAZELHA_KEY_ALIAS" to providers.environmentVariable("NAZELHA_KEY_ALIAS").orNull,
+        "NAZELHA_KEY_PASSWORD" to providers.environmentVariable("NAZELHA_KEY_PASSWORD").orNull,
+    )
+
+if (providers.gradleProperty("nazelhaRequirePreviewSigning").orNull == "true") {
+    val missingInputs = previewSigningEnvironment.filterValues { it.isNullOrBlank() }.keys
+    check(missingInputs.isEmpty()) {
+        "Missing required Nazelha preview signing inputs: ${missingInputs.joinToString()}"
+    }
+    val keystorePath = previewSigningEnvironment.getValue("NAZELHA_KEYSTORE_FILE")!!
+    check(file(keystorePath).isFile) { "Nazelha preview signing keystore file is unavailable." }
+}
 
 android {
     compileSdk = 35
@@ -30,7 +46,7 @@ android {
         applicationId = "com.snapnet.preview"
         minSdk = 24
         targetSdk = 35
-        versionCode = 100_070_400
+        versionCode = 100_080_400
         check(versionCode == currentVersionCode)
 
         versionName = baseVersionName
@@ -77,6 +93,16 @@ android {
         }
     }
 
+    signingConfigs {
+        create("nazelhaPreview") {
+            previewSigningEnvironment["NAZELHA_KEYSTORE_FILE"]?.let { storeFile = file(it) }
+            storePassword = previewSigningEnvironment["NAZELHA_STORE_PASSWORD"]
+            keyAlias = previewSigningEnvironment["NAZELHA_KEY_ALIAS"]
+            keyPassword = previewSigningEnvironment["NAZELHA_KEY_PASSWORD"]
+            storeType = "JKS"
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = true
@@ -85,6 +111,17 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
             )
+        }
+        create("distribution") {
+            initWith(getByName("release"))
+            applicationIdSuffix = ".debug"
+            versionNameSuffix = "-preview"
+            isDebuggable = false
+            isJniDebuggable = false
+            isMinifyEnabled = true
+            isShrinkResources = true
+            signingConfig = signingConfigs.getByName("nazelhaPreview")
+            matchingFallbacks += listOf("release")
         }
         debug {
             val minifyDebugTarget =

@@ -27,6 +27,45 @@ class HttpDownloadSecurityPolicyTest {
     }
 
     @Test
+    fun cleartextCredentialQueryParametersAreRejectedBeforeTransfer() {
+        listOf(
+                "http://example.com/file?token=secret",
+                "http://example.com/file?%61ccess_token=secret",
+                "http://example.com/file?X-Amz-Signature=signature",
+                "http://example.com/file?api_key=secret",
+                "http://example.com/file?auth_key=secret",
+                "http://example.com/file?access_code=secret",
+                "http://example.com/file?code=secret",
+            )
+            .forEach { url ->
+                assertFalse(
+                    "Unexpectedly accepted $url",
+                    HttpDownloadSecurityPolicy.isSupportedSourceUrl(url),
+                )
+                assertFalse(
+                    HttpDownloadSecurityPolicy.mayStartTask(
+                        url,
+                        isDirectHttpFile = true,
+                        consentGranted = true,
+                    )
+                )
+                assertTrue(HttpDownloadSecurityPolicy.hasCleartextCredentials(url))
+            }
+
+        assertTrue(
+            HttpDownloadSecurityPolicy.isSupportedSourceUrl("http://example.com/file?download=1")
+        )
+        assertTrue(
+            HttpDownloadSecurityPolicy.isSupportedSourceUrl("https://example.com/file?token=secret")
+        )
+        assertFalse(
+            HttpDownloadSecurityPolicy.hasCleartextCredentials(
+                "https://example.com/file?token=secret"
+            )
+        )
+    }
+
+    @Test
     fun cleartextMustBeConfirmedForEachHttpSourceButNotHttps() {
         assertTrue(HttpDownloadSecurityPolicy.requiresUserConfirmation("http://example.com/file"))
         assertFalse(HttpDownloadSecurityPolicy.requiresUserConfirmation("https://example.com/file"))
@@ -70,6 +109,24 @@ class HttpDownloadSecurityPolicyTest {
             )
         )
         assertTrue(HttpDownloadSecurityPolicy.mayFollowRedirect("http://example.com/a", "/b"))
+        assertFalse(
+            HttpDownloadSecurityPolicy.mayFollowRedirect(
+                "http://example.com/a",
+                "/b?access_token=secret",
+            )
+        )
+        assertFalse(
+            HttpDownloadSecurityPolicy.mayFollowRedirect(
+                "http://example.com/a",
+                "/b?auth_key=secret",
+            )
+        )
+        assertFalse(
+            HttpDownloadSecurityPolicy.mayFollowRedirect("http://example.com/a", "/b?code=secret")
+        )
+        assertTrue(
+            HttpDownloadSecurityPolicy.mayFollowRedirect("http://example.com/a", "/b?download=1")
+        )
         assertFalse(
             HttpDownloadSecurityPolicy.mayFollowRedirect(
                 "https://example.com/a",
