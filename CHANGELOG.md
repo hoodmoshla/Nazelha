@@ -19,6 +19,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Predictive back animation support for Android 14+
 - Bump up minimum API level to 24 (Android 7.0)
 
+## [v1.0.8] - preview (2026-10-28)
+
+### Security
+
+- Restrict cleartext HTTP to user-selected direct-file downloads after an explicit per-link warning; do not attach stored cookies or authorization headers to this path.
+- Reject common credential-like HTTP query parameters and HTTPS-to-HTTP redirects; keep the in-app browser and cookie editor HTTPS-only.
+- Require manual recovery of restored tasks and fresh HTTP consent when retrying; mark exported Netscape cookies as `Secure`.
+
+### Changed
+
+- Add a permanent Nazelha-only Preview signing key and a minified, non-debuggable ARM64 distribution. Future Preview releases must reuse this certificate.
+
+### Installation note
+
+- This certificate differs from v1.0.7, so Android cannot update an installed v1.0.7. Back up important data and uninstall the old Preview before installing 1.0.8.
+
 ## [v1.0.7] - preview (2026-10-27)
 
 ### Added
