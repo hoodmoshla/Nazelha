@@ -29,6 +29,10 @@ import com.snapnet.util.PreferenceUtil.getBoolean
 
 private const val TAG = "NotificationUtil"
 
+private fun NotificationCompat.Builder.setNazelhaAppearance(): NotificationCompat.Builder =
+    setSmallIcon(R.drawable.ic_stat_nazelha)
+        .setColor(context.getColor(R.color.ic_launcher_background))
+
 @SuppressLint("StaticFieldLeak")
 object NotificationUtil {
     private val notificationManager =
@@ -45,10 +49,8 @@ object NotificationUtil {
     private val activeProgressNotifications = linkedMapOf<Int, Notification>()
     private val progressNotificationsLock = Any()
 
-    //    private var builder =
-    //        NotificationCompat.Builder(context, CHANNEL_ID).setSmallIcon(R.drawable.ic_stat_seal)
     private val commandNotificationBuilder =
-        NotificationCompat.Builder(context, CHANNEL_ID).setSmallIcon(R.drawable.ic_stat_seal)
+        NotificationCompat.Builder(context, CHANNEL_ID).setNazelhaAppearance()
 
     @RequiresApi(Build.VERSION_CODES.O)
     fun createNotificationChannel() {
@@ -117,7 +119,7 @@ object NotificationUtil {
 
         val notification =
             NotificationCompat.Builder(context, CHANNEL_ID)
-            .setSmallIcon(R.drawable.ic_stat_seal)
+            .setNazelhaAppearance()
             .setContentTitle(title)
             .setContentText(text)
             .setProgress(PROGRESS_MAX, progress, progress <= 0)
@@ -169,7 +171,7 @@ object NotificationUtil {
                 }
 
         NotificationCompat.Builder(context, CHANNEL_ID)
-            .setSmallIcon(R.drawable.ic_stat_seal)
+            .setNazelhaAppearance()
             .setContentTitle(title)
             .setContentText(context.getString(R.string.paused))
             .setProgress(PROGRESS_MAX, progress, false)
@@ -196,7 +198,7 @@ object NotificationUtil {
 
         val builder =
             NotificationCompat.Builder(context, CHANNEL_ID)
-                .setSmallIcon(R.drawable.ic_stat_seal)
+                .setNazelhaAppearance()
                 .setContentText(text)
                 .setOngoing(notificationState.ongoing)
                 .setAutoCancel(true)
@@ -214,7 +216,7 @@ object NotificationUtil {
         //        notificationManager.cancel(notificationId)
         val builder =
             NotificationCompat.Builder(context, CHANNEL_ID)
-                .setSmallIcon(R.drawable.ic_stat_seal)
+                .setNazelhaAppearance()
                 .setContentText(text)
                 .setProgress(0, 0, false)
                 .setAutoCancel(true)
@@ -243,7 +245,7 @@ object NotificationUtil {
         serviceNotificationId = SERVICE_NOTIFICATION_ID
         serviceNotification =
             NotificationCompat.Builder(context, CHANNEL_ID)
-                .setSmallIcon(R.drawable.ic_stat_seal)
+                .setNazelhaAppearance()
                 .setContentTitle(context.getString(R.string.downloading_indicator_text))
                 .setProgress(PROGRESS_MAX, PROGRESS_INITIAL, true)
                 .setOngoing(true)
@@ -296,7 +298,7 @@ object NotificationUtil {
                     PendingIntent.FLAG_UPDATE_CURRENT,
             )
         NotificationCompat.Builder(context, CHANNEL_ID)
-            .setSmallIcon(R.drawable.ic_stat_seal)
+            .setNazelhaAppearance()
             .setContentTitle(title)
             .setContentText(context.getString(textId))
             .setOngoing(false)
@@ -354,7 +356,7 @@ object NotificationUtil {
 
         val notification =
             NotificationCompat.Builder(context, CHANNEL_ID)
-            .setSmallIcon(R.drawable.ic_stat_seal)
+            .setNazelhaAppearance()
             .setContentTitle(
                 "[${templateName}_${taskUrl}] " +
                     context.getString(R.string.execute_command_notification)
