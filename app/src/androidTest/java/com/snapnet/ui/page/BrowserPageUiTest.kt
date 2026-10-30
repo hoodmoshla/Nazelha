@@ -1,7 +1,6 @@
 package com.snapnet.ui.page
 
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.ui.test.assertDoesNotExist
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
@@ -9,6 +8,7 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -28,7 +28,10 @@ class BrowserPageUiTest {
         composeRule.waitForIdle()
         composeRule.onNodeWithTag("browser_address_input").assertIsDisplayed()
         composeRule.onNodeWithTag("browser_start_panel").assertIsDisplayed()
-        composeRule.onNodeWithTag("browser_webview").assertDoesNotExist()
+        assertTrue(
+            "The empty WebView should not be composed on the browser start screen",
+            composeRule.onAllNodesWithTag("browser_webview").fetchSemanticsNodes().isEmpty(),
+        )
     }
 
     @Test
@@ -48,6 +51,9 @@ class BrowserPageUiTest {
         }
 
         composeRule.onNodeWithTag("browser_webview", useUnmergedTree = true).assertIsDisplayed()
-        composeRule.onNodeWithTag("browser_start_panel").assertDoesNotExist()
+        assertTrue(
+            "The start panel should be replaced after an HTTPS address is submitted",
+            composeRule.onAllNodesWithTag("browser_start_panel").fetchSemanticsNodes().isEmpty(),
+        )
     }
 }
