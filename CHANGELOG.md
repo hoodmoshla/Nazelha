@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes (starting from v1.7.3) to stable releases will be documented in this file.
+All notable changes to stable releases are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
@@ -18,6 +18,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Select from formats/playlists in Quick Download
 - Predictive back animation support for Android 14+
 - Bump up minimum API level to 24 (Android 7.0)
+
+## [v1.0.12] - 2026-10-31
+
+### Fixed
+
+- Give Nazelha download and service notifications their own icon and appearance.
+- Refresh stale or incompatible yt-dlp engines more safely, with a rollback path if the refreshed engine cannot run.
+- Read the version from yt-dlp zipapps that include a shebang before the archive.
+
+### Tests
+
+- Add regression coverage for stale-engine detection and shebang-prefixed zipapps, plus an Android API 35 check of yt-dlp update and QuickJS runtime support.
 
 ## [v1.0.8] - preview (2026-10-28)
 
