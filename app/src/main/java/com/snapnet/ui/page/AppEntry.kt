@@ -77,13 +77,7 @@ fun AppEntry(dialogViewModel: DownloadDialogViewModel) {
         }
     }
     fun navigateToTop(destination: TopLevelDestination) {
-        if (currentRoute != destination.route) {
-            navController.navigate(destination.route) {
-                popUpTo(route = Route.HOME) { saveState = true }
-                launchSingleTop = true
-                restoreState = true
-            }
-        }
+        navController.navigateToTopLevel(destination)
     }
 
     Scaffold(

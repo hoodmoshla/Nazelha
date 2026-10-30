@@ -16,6 +16,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.platform.testTag
+import androidx.navigation.NavGraph.Companion.findStartDestination
+import androidx.navigation.NavHostController
 import com.hoodmoshla.nazelha.R
 
 /** The five persistent destinations, declared in the required logical RTL order. */
@@ -29,6 +31,23 @@ enum class TopLevelDestination(val route: String) {
 
 fun topLevelDestinationForRoute(route: String?): TopLevelDestination? =
     TopLevelDestination.entries.firstOrNull { it.route == route }
+
+internal fun NavHostController.navigateToTopLevel(destination: TopLevelDestination) {
+    if (currentBackStackEntry?.destination?.route == destination.route) return
+
+    if (
+        destination == TopLevelDestination.HOME &&
+            popBackStack(destination.route, inclusive = false, saveState = true)
+    ) {
+        return
+    }
+
+    navigate(destination.route) {
+        popUpTo(graph.findStartDestination().id) { saveState = true }
+        launchSingleTop = true
+        restoreState = true
+    }
+}
 
 @Composable
 fun BottomNavigationBar(

@@ -10,6 +10,7 @@ import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -43,6 +44,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -178,8 +180,15 @@ fun BrowserPage(onDownloadLink: (String) -> Unit, modifier: Modifier = Modifier)
             pageFailed = true
             return
         }
-        address = uri.toString()
-        browser.loadUrl(uri.toString())
+        val nextUrl = uri.toString()
+        address = nextUrl
+        pageFailed = false
+        if (currentUrl == nextUrl) {
+            browser.reload()
+        } else {
+            currentUrl = nextUrl
+            browser.loadUrl(nextUrl)
+        }
     }
 
     Column(modifier = modifier.fillMaxSize()) {
@@ -191,7 +200,7 @@ fun BrowserPage(onDownloadLink: (String) -> Unit, modifier: Modifier = Modifier)
             OutlinedTextField(
                 value = address,
                 onValueChange = { address = it },
-                modifier = Modifier.weight(1f),
+                modifier = Modifier.weight(1f).testTag("browser_address_input"),
                 singleLine = true,
                 shape = RoundedCornerShape(18.dp),
                 label = { Text(stringResource(R.string.browser_address)) },
@@ -204,7 +213,7 @@ fun BrowserPage(onDownloadLink: (String) -> Unit, modifier: Modifier = Modifier)
                 modifier =
                     Modifier.semantics {
                         contentDescription = context.getString(R.string.browser_go)
-                    },
+                    }.testTag("browser_go_button"),
             ) {
                 Icon(Icons.AutoMirrored.Outlined.ArrowForward, contentDescription = null)
             }
@@ -269,20 +278,28 @@ fun BrowserPage(onDownloadLink: (String) -> Unit, modifier: Modifier = Modifier)
             )
         }
         if (currentUrl.isBlank()) {
-            Card(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
-                Column(modifier = Modifier.padding(18.dp)) {
-                    Text(
-                        stringResource(R.string.browser_welcome),
-                        style = MaterialTheme.typography.titleMedium,
-                    )
+            Box(
+                modifier = Modifier.weight(1f).fillMaxWidth().padding(16.dp).testTag("browser_start_panel"),
+                contentAlignment = Alignment.Center,
+            ) {
+                Card(modifier = Modifier.fillMaxWidth()) {
+                    Column(modifier = Modifier.padding(18.dp)) {
+                        Text(
+                            stringResource(R.string.browser_welcome),
+                            style = MaterialTheme.typography.titleMedium,
+                        )
+                    }
                 }
             }
+        } else {
+            AndroidView(
+                factory = { browser },
+                modifier = Modifier.weight(1f).fillMaxWidth().testTag("browser_webview"),
+                update = { view ->
+                    if (view.url.isNullOrBlank()) view.loadUrl(currentUrl)
+                },
+            )
         }
-        AndroidView(
-            factory = { browser },
-            modifier = Modifier.weight(1f).fillMaxWidth(),
-            update = {},
-        )
         if (pageFailed) {
             Row(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp),
