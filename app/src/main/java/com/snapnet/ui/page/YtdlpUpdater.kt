@@ -22,6 +22,8 @@ import kotlinx.coroutines.withContext
 
 private const val TAG = "YtdlpUpdater"
 
+private const val MAX_ENGINE_AGE_DAYS = 90L
+
 @Composable
 fun YtdlpUpdater() {
 
@@ -37,20 +39,29 @@ fun YtdlpUpdater() {
             return@LaunchedEffect
         }
 
-        // An engine older than --js-runtimes cannot run a single request: yt-dlp rejects the option
-        // the library passes on every invocation, which aborts even a plain YouTube extraction. That
-        // cannot wait for the configured interval, so the interval is skipped in that case.
-        val engineSupportsJsRuntimes = YtDlpVersion.effectiveEngineSupportsJsRuntimes(App.context)
-        if (!engineSupportsJsRuntimes) {
-            Log.w(
-                TAG,
-                "yt-dlp engine is older than --js-runtimes; updating now, ignoring the update interval",
-            )
-        } else {
-            val lastUpdateTime = YT_DLP_UPDATE_TIME.getLong()
-            val currentTime = System.currentTimeMillis()
-            if (currentTime < lastUpdateTime + YT_DLP_UPDATE_INTERVAL.getLong()) {
-                return@LaunchedEffect
+        val currentEngineVersion = YtDlpVersion.resolveEffectiveVersion(App.context)
+        val engineSupportsJsRuntimes = YtDlpVersion.supportsJsRuntimes(currentEngineVersion)
+        val engineIsStale =
+            YtDlpVersion.isOlderThanDays(currentEngineVersion, MAX_ENGINE_AGE_DAYS)
+        when {
+            !engineSupportsJsRuntimes ->
+                Log.w(
+                    TAG,
+                    "yt-dlp engine $currentEngineVersion does not support --js-runtimes; " +
+                        "updating now, ignoring the update interval",
+                )
+            engineIsStale ->
+                Log.w(
+                    TAG,
+                    "yt-dlp engine $currentEngineVersion is older than $MAX_ENGINE_AGE_DAYS days; " +
+                        "updating now, ignoring the update interval",
+                )
+            else -> {
+                val lastUpdateTime = YT_DLP_UPDATE_TIME.getLong()
+                val currentTime = System.currentTimeMillis()
+                if (currentTime < lastUpdateTime + YT_DLP_UPDATE_INTERVAL.getLong()) {
+                    return@LaunchedEffect
+                }
             }
         }
 

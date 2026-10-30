@@ -68,13 +68,8 @@ object UpdateUtil {
                     else -> YoutubeDL.UpdateChannel.STABLE
                 }
 
-            val result = YtDlpUpdater.safeUpdate(context, channel)
-
-            if (result == YtDlpUpdater.Result.UPDATED) {
-                YtDlpVersion.resolveEffectiveVersion(context)?.let {
-                    PreferenceUtil.encodeString(YT_DLP_VERSION, it)
-                }
-            }
+            val updateResult = YtDlpUpdater.safeUpdate(context, channel)
+            val result = verifyRuntimeOrRestore(updateResult)
 
             when (result) {
                 YtDlpUpdater.Result.UPDATED,
@@ -82,8 +77,48 @@ object UpdateUtil {
                 else -> Unit // leave the interval untouched so the next launch retries
             }
 
+            if (
+                result == YtDlpUpdater.Result.FAILED ||
+                    result == YtDlpUpdater.Result.FAILED_ROLLED_BACK
+            ) {
+                throw IllegalStateException(
+                    "yt-dlp update failed; a runnable previous engine was restored when possible"
+                )
+            }
+
             result
         }
+
+    private suspend fun verifyRuntimeOrRestore(
+        updateResult: YtDlpUpdater.Result
+    ): YtDlpUpdater.Result {
+        val runningVersion = YtDlpEngine.probeVersion().getOrNull()
+        if (runningVersion != null) {
+            PreferenceUtil.encodeString(YT_DLP_VERSION, runningVersion)
+            return updateResult
+        }
+
+        Log.w(TAG, "yt-dlp failed runtime verification after update; restoring a runnable engine")
+        var restoredVersion: String? = null
+        if (YtDlpUpdater.restorePreviousEngine(context)) {
+            restoredVersion = YtDlpEngine.probeVersion().getOrNull()
+        }
+        if (restoredVersion == null) {
+            YtDlpEngine.restoreBundledEngine(context)
+                .onFailure { Log.e(TAG, "could not restore the bundled yt-dlp engine", it) }
+            restoredVersion = YtDlpEngine.probeVersion().getOrNull()
+        }
+
+        val runnableRestoredVersion = restoredVersion
+        if (runnableRestoredVersion != null) {
+            PreferenceUtil.encodeString(YT_DLP_VERSION, runnableRestoredVersion)
+            Log.w(TAG, "restored runnable yt-dlp engine: $runnableRestoredVersion")
+            return YtDlpUpdater.Result.FAILED_ROLLED_BACK
+        }
+
+        Log.e(TAG, "neither the updated nor restored yt-dlp engine could run")
+        return YtDlpUpdater.Result.FAILED
+    }
 
     private fun getLatestRelease(): Release? =
         client.newCall(requestForReleases).execute().body.use {

@@ -4,6 +4,9 @@ import com.hoodmoshla.nazelha.R
 import android.content.Context
 import android.util.Log
 import java.io.File
+import java.util.GregorianCalendar
+import java.util.Locale
+import java.util.TimeZone
 import java.util.zip.ZipInputStream
 
 /**
@@ -27,6 +30,8 @@ object YtDlpVersion {
 
     /** `__version__ = '2025.11.12'` */
     private val VERSION_PATTERN = Regex("""__version__\s*=\s*'([^']+)'""")
+    private val VERSION_DATE_PATTERN = Regex("""^(\d{4})\.(\d{1,2})\.(\d{1,2})""")
+    private const val MILLIS_PER_DAY = 86_400_000L
 
     /**
      * The oldest engine that understands `--js-runtimes`.
@@ -99,6 +104,34 @@ object YtDlpVersion {
     /** @return true when [version] understands `--js-runtimes`. */
     fun supportsJsRuntimes(version: String?): Boolean =
         compare(version, MIN_VERSION_FOR_JS_RUNTIMES) >= 0
+
+    /**
+     * Returns true when a date-based engine version is more than [maxAgeDays] old.
+     * Unknown or malformed versions are not considered stale here; callers separately treat an
+     * unknown version as incompatible with features the app requires.
+     */
+    fun isOlderThanDays(
+        version: String?,
+        maxAgeDays: Long,
+        nowMillis: Long = System.currentTimeMillis(),
+    ): Boolean {
+        require(maxAgeDays >= 0) { "maxAgeDays must be non-negative" }
+        val match = version?.let { VERSION_DATE_PATTERN.find(it) } ?: return false
+        val year = match.groupValues[1].toInt()
+        val month = match.groupValues[2].toInt()
+        val day = match.groupValues[3].toInt()
+        val releaseMillis =
+            runCatching {
+                    GregorianCalendar(TimeZone.getTimeZone("UTC"), Locale.ROOT).apply {
+                        isLenient = false
+                        clear()
+                        set(year, month - 1, day, 0, 0, 0)
+                    }.timeInMillis
+                }
+                .getOrNull() ?: return false
+
+        return nowMillis - releaseMillis > maxAgeDays * MILLIS_PER_DAY
+    }
 
     /** Convenience: does the engine that will run support `--js-runtimes`? */
     fun effectiveEngineSupportsJsRuntimes(context: Context): Boolean =

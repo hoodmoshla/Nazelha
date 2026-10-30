@@ -39,7 +39,7 @@ object YtDlpUpdater {
 
     /** Outcome of an update attempt. */
     enum class Result {
-        /** A new version was installed and verified. */
+        /** A new version was installed and its release asset passed integrity checks. */
         UPDATED,
 
         /** The installed binary already matches the selected channel's latest release. */
@@ -119,6 +119,9 @@ object YtDlpUpdater {
             }
             .onFailure { Log.e(TAG, "rollback failed", it) }
             .getOrDefault(false)
+
+    /** Restores the previously backed-up engine after a newly installed engine fails to run. */
+    fun restorePreviousEngine(context: Context): Boolean = rollback(context)
 
     private fun responseText(url: String, accept: String): String {
         val request =
