@@ -62,7 +62,7 @@ android {
         applicationId = "com.hoodmoshla.nazelha"
         minSdk = 24
         targetSdk = 35
-        versionCode = 100_090_400
+        versionCode = 100_100_400
         check(versionCode == currentVersionCode)
 
         versionName = baseVersionName

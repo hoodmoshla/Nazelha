@@ -48,7 +48,7 @@ jobs:
       - name: Validate Gradle wrapper
         uses: gradle/actions/wrapper-validation@v3
 
-      - name: Run unit tests, Android lint, and ARM64 debug build
+      - name: Run unit tests, compile Android tests, and lint
         env:
           NAZELHA_LIVE_HTTP_TESTS: '1'
         run: >-
@@ -57,6 +57,17 @@ jobs:
           :app:compileGithubPreviewDebugAndroidTestKotlin
           :app:lintGithubPreviewDebug
           :app:lintGenericRelease
+          -PnoSplits
+          -PABI_FILTERS=arm64-v8a
+          --no-daemon
+          --no-configuration-cache
+          "-Dorg.gradle.jvmargs=-Xmx3g -Dfile.encoding=UTF-8"
+          --stacktrace
+
+      - name: Assemble ARM64 debug APK for branch validation
+        if: startsWith(github.ref, 'refs/heads/')
+        run: >-
+          ./gradlew
           :app:assembleGithubPreviewDebug
           -PnoSplits
           -PABI_FILTERS=arm64-v8a
@@ -66,6 +77,7 @@ jobs:
           --stacktrace
 
       - name: Verify debug validation APK identity, ABI, and size profile
+        if: startsWith(github.ref, 'refs/heads/')
         shell: bash
         run: |
           set -euo pipefail
@@ -74,7 +86,7 @@ jobs:
           "$tools/apksigner" verify --verbose --print-certs "$apk" | tee apk-verification.txt
           "$tools/aapt" dump badging "$apk" >> apk-verification.txt
           grep -q "package: name='com.snapnet.preview.debug'" apk-verification.txt
-          grep -q "versionCode='100090402' versionName='1.0.9-debug'" apk-verification.txt
+          grep -q "versionCode='100100402' versionName='1.0.10-debug'" apk-verification.txt
           grep -q "application-label:'نزّلها — فيديو وملفات'" apk-verification.txt
           grep -Eq 'certificate SHA-256 digest: [[:xdigit:]]{64}$' apk-verification.txt
           test -s app/build/outputs/mapping/githubPreviewDebug/mapping.txt
@@ -164,9 +176,10 @@ jobs:
             -PnoSplits \
             -PABI_FILTERS=arm64-v8a \
             -PnazelhaRequireProductionSigning=true \
+            --max-workers=2 \
             --no-daemon \
             --no-configuration-cache \
-            "-Dorg.gradle.jvmargs=-Xmx3g -Dfile.encoding=UTF-8" \
+            "-Dorg.gradle.jvmargs=-Xmx4g -Dfile.encoding=UTF-8" \
             --stacktrace
 
       - name: Verify official APK identity, ABI, signing certificate, and profile
@@ -185,7 +198,7 @@ jobs:
           printf 'APK debuggable: %s\n' "$debuggable" >> official-verification.txt
           "$tools/aapt" dump badging "$apk" >> official-verification.txt
           grep -q "package: name='com.hoodmoshla.nazelha'" official-verification.txt
-          grep -q "versionCode='100090402' versionName='1.0.9'" official-verification.txt
+          grep -q "versionCode='100100402' versionName='1.0.10'" official-verification.txt
           grep -q "application-label:'نزّلها — فيديو وملفات'" official-verification.txt
           grep -q "Verified using v2 scheme (APK Signature Scheme v2): true" official-verification.txt
           grep -Fxq 'APK debuggable: false' official-verification.txt
@@ -207,7 +220,7 @@ jobs:
           with open(apk,'rb') as source:
               for chunk in iter(lambda: source.read(1024*1024), b''):
                   digest.update(chunk)
-          report={'apk':os.path.basename(apk),'apk_bytes':os.path.getsize(apk),'sha256':digest.hexdigest(),'abi':abis,'application_id':'com.hoodmoshla.nazelha','version_name':'1.0.9','version_code':100090402}
+          report={'apk':os.path.basename(apk),'apk_bytes':os.path.getsize(apk),'sha256':digest.hexdigest(),'abi':abis,'application_id':'com.hoodmoshla.nazelha','version_name':'1.0.10','version_code':100100402}
           with open('official-apk-size-profile.json','w') as output:
               json.dump(report,output,indent=2)
               output.write('\n')
@@ -278,7 +291,7 @@ jobs:
           printf 'APK debuggable: %s\n' "$debuggable" >> preview-verification.txt
           "$tools/aapt" dump badging "$apk" >> preview-verification.txt
           grep -q "package: name='com.snapnet.preview.debug'" preview-verification.txt
-          grep -q "versionCode='100090402' versionName='1.0.9-preview'" preview-verification.txt
+          grep -q "versionCode='100100402' versionName='1.0.10-preview'" preview-verification.txt
           grep -q "application-label:'نزّلها — فيديو وملفات'" preview-verification.txt
           digest_line=$(grep -i -m1 'certificate SHA-256 digest:' preview-verification.txt)
           digest=${digest_line#*digest: }
@@ -378,7 +391,7 @@ jobs:
           printf 'APK debuggable: %s\n' "$debuggable" >> x86_64-install-smoke-verification.txt
           "$tools/aapt" dump badging "$apk" >> x86_64-install-smoke-verification.txt
           grep -q "package: name='com.snapnet.preview.debug'" x86_64-install-smoke-verification.txt
-          grep -q "versionCode='100090404' versionName='1.0.9-preview'" x86_64-install-smoke-verification.txt
+          grep -q "versionCode='100100404' versionName='1.0.10-preview'" x86_64-install-smoke-verification.txt
           digest_line=$(grep -i -m1 'certificate SHA-256 digest:' x86_64-install-smoke-verification.txt)
           digest=${digest_line#*digest: }
           digest=${digest//:/}
@@ -392,7 +405,7 @@ jobs:
               abis=sorted({p.split('/')[1] for p in z.namelist() if p.startswith('lib/') and p.endswith('.so')})
           assert abis == ['x86_64'], abis
           PY
-          smoke_apk="$(dirname "$apk")/Nazelha-1.0.9-x86_64-distribution.apk"
+          smoke_apk="$(dirname "$apk")/Nazelha-1.0.10-x86_64-distribution.apk"
           if [[ "$apk" != "$smoke_apk" ]]; then cp -- "$apk" "$smoke_apk"; fi
           sha256sum "$smoke_apk" > "$smoke_apk.sha256"
 
@@ -518,7 +531,7 @@ jobs:
           grep -q "Verified using v2 scheme (APK Signature Scheme v2): true" release-assets/preview-verification.txt
           grep -Fxq 'APK debuggable: false' release-assets/preview-verification.txt
           grep -q "package: name='com.snapnet.preview.debug'" release-assets/preview-verification.txt
-          grep -q "versionCode='100090402' versionName='1.0.9-preview'" release-assets/preview-verification.txt
+          grep -q "versionCode='100100402' versionName='1.0.10-preview'" release-assets/preview-verification.txt
           grep -q "application-label:'نزّلها — فيديو وملفات'" release-assets/preview-verification.txt
           grep -Fxq "Verified certificate SHA-256 (normalized): $NAZELHA_EXPECTED_RELEASE_CERT_SHA256" release-assets/preview-verification.txt
           python3 - "$source_apk" release-assets/preview-apk-size-profile.json <<'PY'
@@ -593,7 +606,7 @@ jobs:
           grep -q "Verified using v2 scheme (APK Signature Scheme v2): true" release-assets/official-verification.txt
           grep -Fxq 'APK debuggable: false' release-assets/official-verification.txt
           grep -q "package: name='com.hoodmoshla.nazelha'" release-assets/official-verification.txt
-          grep -q "versionCode='100090402' versionName='1.0.9'" release-assets/official-verification.txt
+          grep -q "versionCode='100100402' versionName='1.0.10'" release-assets/official-verification.txt
           grep -Fxq "Verified production certificate SHA-256 (normalized): $NAZELHA_EXPECTED_PRODUCTION_CERT_SHA256" release-assets/official-verification.txt
           python3 - "$source_apk" release-assets/official-apk-size-profile.json <<'PY'
           import hashlib, json, os, sys
@@ -609,8 +622,8 @@ jobs:
           assert report['sha256'] == digest.hexdigest()
           assert report['abi'] == ['arm64-v8a']
           assert report['application_id'] == 'com.hoodmoshla.nazelha'
-          assert report['version_name'] == '1.0.9'
-          assert report['version_code'] == 100090402
+          assert report['version_name'] == '1.0.10'
+          assert report['version_code'] == 100100402
           PY
           apk_name="$(basename "$source_apk")"
           release_apk="release-assets/$apk_name"
@@ -627,14 +640,14 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
-          name: Nazelha 1.0.9 — الإصدار الرسمي
+          name: Nazelha 1.0.10 — الإصدار الرسمي
           prerelease: false
           generate_release_notes: true
           body: |
-            ## نزّلها 1.0.9 — الإصدار الرسمي الأول
+            ## نزّلها 1.0.10 — الإصدار الرسمي الأول
 
             - الحزمة: `com.hoodmoshla.nazelha` (هوية Nazelha المستقلة).
-            - APK لمعمارية `arm64-v8a`، الإصدار `1.0.9`، ورمز الإصدار `100090402`.
+            - APK لمعمارية `arm64-v8a`، الإصدار `1.0.10`، ورمز الإصدار `100100402`.
             - وُقّع بمفتاح إنتاج مستقل ودائم خاص بـNazelha، واجتاز التحقق الآلي من التوقيع والهوية والبناء والاختبارات.
             - يتضمن تحسينات لاستخراج روابط X/Twitter؛ اختبارات الرجوع تستخدم بيانات اختبار ثابتة، ولم يُجر تنزيل حي من X ضمن هذا الإصدار.
 
