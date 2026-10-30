@@ -4,7 +4,7 @@ import androidx.appcompat.app.AppCompatDelegate
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.res.stringResource
 import androidx.core.os.LocaleListCompat
-import com.snapnet.R
+import com.hoodmoshla.nazelha.R
 import java.util.Locale
 
 // Do not modify

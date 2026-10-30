@@ -55,7 +55,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import com.snapnet.R
+import com.hoodmoshla.nazelha.R
 import com.snapnet.ui.theme.SealTheme
 import com.snapnet.util.Format
 import com.snapnet.util.VideoInfo

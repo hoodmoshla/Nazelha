@@ -43,7 +43,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.os.LocaleListCompat
-import com.snapnet.R
+import com.hoodmoshla.nazelha.R
 import com.snapnet.ui.component.BackButton
 import com.snapnet.ui.component.PreferenceSingleChoiceItem
 import com.snapnet.ui.component.PreferenceSubtitle

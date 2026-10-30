@@ -50,7 +50,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.snapnet.R
+import com.hoodmoshla.nazelha.R
 import com.snapnet.database.objects.CommandTemplate
 import com.snapnet.ui.component.AdjacentLabel
 import com.snapnet.ui.component.BackButton

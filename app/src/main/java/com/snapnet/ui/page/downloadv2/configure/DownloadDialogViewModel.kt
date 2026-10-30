@@ -2,7 +2,7 @@ package com.snapnet.ui.page.downloadv2.configure
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.snapnet.R
+import com.hoodmoshla.nazelha.R
 import com.snapnet.database.objects.CommandTemplate
 import com.snapnet.download.DownloaderV2
 import com.snapnet.download.Task

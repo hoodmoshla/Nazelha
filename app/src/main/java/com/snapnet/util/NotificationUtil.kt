@@ -24,7 +24,7 @@ import com.snapnet.NotificationActionReceiver.Companion.ACTION_RESUME_TASK
 import com.snapnet.NotificationActionReceiver.Companion.ERROR_REPORT_KEY
 import com.snapnet.NotificationActionReceiver.Companion.NOTIFICATION_ID_KEY
 import com.snapnet.NotificationActionReceiver.Companion.TASK_ID_KEY
-import com.snapnet.R
+import com.hoodmoshla.nazelha.R
 import com.snapnet.util.PreferenceUtil.getBoolean
 
 private const val TAG = "NotificationUtil"

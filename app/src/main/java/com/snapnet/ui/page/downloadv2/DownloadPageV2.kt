@@ -85,7 +85,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.constraintlayout.compose.ConstraintLayout
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.snapnet.R
+import com.hoodmoshla.nazelha.R
 import com.snapnet.download.DownloadErrorKind
 import com.snapnet.download.DownloadErrorMapper
 import com.snapnet.download.DownloaderV2
@@ -133,9 +133,26 @@ import org.koin.compose.koinInject
 private const val TAG = "DownloadPageV2"
 
 private val URL_QUERY_PARAMETER = Regex("""([?&][^=&#\s]+=)[^&#\s]*""")
+private val DIAGNOSTIC_ERROR_ID = Regex("""\b[a-fA-F0-9]{16}-[A-Z]{3}\b""")
+private val X_TWITTER_HOSTS =
+    setOf(
+        "x.com",
+        "www.x.com",
+        "m.x.com",
+        "mobile.x.com",
+        "twitter.com",
+        "www.twitter.com",
+        "m.twitter.com",
+        "mobile.twitter.com",
+    )
 
-internal fun downloadErrorMessageRes(throwable: Throwable): Int =
-    when (DownloadErrorMapper.classify(throwable.message ?: throwable.toString())) {
+internal fun downloadErrorMessageRes(throwable: Throwable, sourceUrl: String? = null): Int {
+    val message =
+        generateSequence(throwable) { it.cause }
+            .mapNotNull { it.message }
+            .joinToString("\n")
+            .ifBlank { throwable.toString() }
+    return when (DownloadErrorMapper.classify(message)) {
         DownloadErrorKind.NETWORK_ERROR -> R.string.download_error_network
         DownloadErrorKind.DISK_FULL -> R.string.download_error_disk_full
         DownloadErrorKind.LOGIN_REQUIRED,
@@ -144,8 +161,31 @@ internal fun downloadErrorMessageRes(throwable: Throwable): Int =
         DownloadErrorKind.VIDEO_UNAVAILABLE,
         DownloadErrorKind.GEO_BLOCKED -> R.string.download_error_unavailable
         DownloadErrorKind.CAPTCHA_REQUIRED -> R.string.download_error_captcha
+        DownloadErrorKind.FORMAT_UNAVAILABLE -> R.string.download_error_formats
+        DownloadErrorKind.UNSUPPORTED_URL -> R.string.download_error_unsupported_url
+        DownloadErrorKind.RATE_LIMITED -> R.string.download_error_rate_limited
+        DownloadErrorKind.UNSUPPORTED_JS_RUNTIME -> R.string.download_error_js_runtime
+        DownloadErrorKind.PO_TOKEN_REQUIRED -> R.string.download_error_auth
+        DownloadErrorKind.UNKNOWN ->
+            if (sourceUrl.isXTwitterUrl()) R.string.download_error_x_unknown
+            else R.string.download_error_msg
         else -> R.string.download_error_msg
     }
+}
+
+internal fun downloadErrorDiagnosticId(throwable: Throwable): String? =
+    generateSequence(throwable) { it.cause }
+        .mapNotNull { it.message }
+        .firstNotNullOfOrNull { DIAGNOSTIC_ERROR_ID.find(it)?.value }
+
+private fun String?.isXTwitterUrl(): Boolean {
+    val host =
+        this?.let { url ->
+            runCatching { java.net.URI(url.trim()).host?.lowercase(java.util.Locale.ROOT) }
+                .getOrNull()
+        }
+    return host in X_TWITTER_HOSTS
+}
 
 /** Redacts credential-shaped text and every URL query value before details leave the error UI. */
 internal fun redactDownloadErrorDetails(text: String): String =

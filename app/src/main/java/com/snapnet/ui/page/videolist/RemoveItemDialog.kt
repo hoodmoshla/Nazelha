@@ -12,7 +12,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
-import com.snapnet.R
+import com.hoodmoshla.nazelha.R
 import com.snapnet.database.objects.DownloadedVideoInfo
 import com.snapnet.ui.component.CheckBoxItem
 import com.snapnet.ui.component.SealDialog

@@ -35,7 +35,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
-import com.snapnet.R
+import com.hoodmoshla.nazelha.R
 import com.snapnet.ui.page.settings.general.ytdlpReference
 
 @Composable

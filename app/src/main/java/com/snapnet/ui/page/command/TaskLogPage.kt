@@ -46,7 +46,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.snapnet.Downloader
-import com.snapnet.R
+import com.hoodmoshla.nazelha.R
 import com.snapnet.ui.component.ButtonChip
 
 private const val TAG = "TaskLogPage"

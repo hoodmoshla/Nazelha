@@ -22,7 +22,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.core.text.isDigitsOnly
-import com.snapnet.R
+import com.hoodmoshla.nazelha.R
 import com.snapnet.ui.component.ConfirmButton
 import com.snapnet.ui.component.DismissButton
 import com.snapnet.util.PlaylistResult

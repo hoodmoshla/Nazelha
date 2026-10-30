@@ -26,7 +26,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import androidx.navigation.navigation
-import com.snapnet.R
+import com.hoodmoshla.nazelha.R
 import com.snapnet.ui.common.Route
 import com.snapnet.ui.common.animatedComposable
 import com.snapnet.ui.common.animatedComposableVariant

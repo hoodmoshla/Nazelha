@@ -25,7 +25,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.res.stringResource
-import com.snapnet.R
+import com.hoodmoshla.nazelha.R
 import com.snapnet.ui.common.booleanState
 import com.snapnet.ui.component.BackButton
 import com.snapnet.ui.component.PreferenceInfo

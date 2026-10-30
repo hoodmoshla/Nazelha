@@ -15,7 +15,7 @@ import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
-import com.snapnet.R
+import com.hoodmoshla.nazelha.R
 import com.snapnet.ui.common.HapticFeedback.slightHapticFeedback
 
 @Composable

@@ -48,7 +48,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.snapnet.R
+import com.hoodmoshla.nazelha.R
 import com.snapnet.ui.common.AsyncImageImpl
 import com.snapnet.util.Format
 import com.snapnet.util.VideoInfo

@@ -45,7 +45,7 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.tooling.preview.Preview
 import com.snapnet.App
 import com.snapnet.App.Companion.packageInfo
-import com.snapnet.R
+import com.hoodmoshla.nazelha.R
 import com.snapnet.ui.component.BackButton
 import com.snapnet.ui.component.ConfirmButton
 import com.snapnet.ui.component.PreferenceItem

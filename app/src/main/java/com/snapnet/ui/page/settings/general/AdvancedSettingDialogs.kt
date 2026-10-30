@@ -26,7 +26,7 @@ import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
-import com.snapnet.R
+import com.hoodmoshla.nazelha.R
 import com.snapnet.ui.component.ConfirmButton
 import com.snapnet.ui.component.DismissButton
 import com.snapnet.ui.component.LinkButton

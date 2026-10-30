@@ -12,7 +12,7 @@ import com.snapnet.App.Companion.applicationScope
 import com.snapnet.App.Companion.context
 import com.snapnet.App.Companion.isDebugBuild
 import com.snapnet.App.Companion.isFDroidBuild
-import com.snapnet.R
+import com.hoodmoshla.nazelha.R
 import com.snapnet.database.objects.CommandTemplate
 import com.snapnet.download.Task
 import com.snapnet.download.safeDownloadTitle

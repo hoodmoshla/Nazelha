@@ -55,7 +55,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.snapnet.R
+import com.hoodmoshla.nazelha.R
 import com.snapnet.ui.common.booleanState
 import com.snapnet.ui.common.intState
 import com.snapnet.ui.common.motion.materialSharedAxisYIn

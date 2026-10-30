@@ -45,7 +45,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.core.text.isDigitsOnly
-import com.snapnet.R
+import com.hoodmoshla.nazelha.R
 import com.snapnet.ui.component.ConfirmButton
 import com.snapnet.ui.component.DismissButton
 import com.snapnet.ui.component.SealDialog

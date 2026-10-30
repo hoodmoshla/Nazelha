@@ -29,7 +29,7 @@
     </queries>
 
     <application
-        android:name=".App"
+        android:name="com.snapnet.App"
         android:networkSecurityConfig="@xml/network_security_config"
         android:allowBackup="true"
         android:dataExtractionRules="@xml/data_extraction_rules"
@@ -43,12 +43,12 @@
         android:supportsRtl="true"
         tools:targetApi="tiramisu">
         <activity
-            android:name=".CrashReportActivity"
+            android:name="com.snapnet.CrashReportActivity"
             android:exported="false"
             android:label="CrashReportActivity"
             android:theme="@style/Theme.SnapNet" />
         <activity
-            android:name=".QuickDownloadActivity"
+            android:name="com.snapnet.QuickDownloadActivity"
             android:excludeFromRecents="true"
             android:exported="true"
             android:label="@string/title_activity_share"
@@ -91,7 +91,7 @@
             https://developer.android.com/develop/background-work/services/fgs/service-types
         -->
         <service
-            android:name=".DownloadService"
+            android:name="com.snapnet.DownloadService"
             android:enabled="true"
             android:exported="false"
             android:foregroundServiceType="specialUse"
@@ -102,7 +102,7 @@
         </service>
 
         <activity
-            android:name=".MainActivity"
+            android:name="com.snapnet.MainActivity"
             android:configChanges="orientation"
             android:exported="true"
             android:launchMode="singleTask"
@@ -134,7 +134,7 @@
                 android:resource="@xml/provider_paths" />
         </provider>
 
-        <receiver android:name=".NotificationActionReceiver" />
+        <receiver android:name="com.snapnet.NotificationActionReceiver" />
     </application>
 
 </manifest>

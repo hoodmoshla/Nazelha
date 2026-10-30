@@ -8,7 +8,7 @@ import android.util.Log
 import androidx.core.content.FileProvider
 import com.snapnet.App
 import com.snapnet.App.Companion.context
-import com.snapnet.R
+import com.hoodmoshla.nazelha.R
 import com.snapnet.util.FileUtil.getFileProvider
 import com.snapnet.util.PreferenceUtil.getInt
 import com.snapnet.util.PreferenceUtil.updateLong

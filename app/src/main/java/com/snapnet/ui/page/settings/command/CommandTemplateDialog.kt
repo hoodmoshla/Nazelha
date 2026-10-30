@@ -44,7 +44,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.DialogProperties
-import com.snapnet.R
+import com.hoodmoshla.nazelha.R
 import com.snapnet.database.objects.CommandTemplate
 import com.snapnet.database.objects.OptionShortcut
 import com.snapnet.ui.component.AddButton

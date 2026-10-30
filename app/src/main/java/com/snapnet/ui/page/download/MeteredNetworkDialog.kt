@@ -7,7 +7,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
-import com.snapnet.R
+import com.hoodmoshla.nazelha.R
 import com.snapnet.ui.component.BottomButtonShape
 import com.snapnet.ui.component.MiddleButtonShape
 import com.snapnet.ui.component.SealDialogButtonVariant

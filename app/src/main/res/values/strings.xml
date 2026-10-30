@@ -21,6 +21,13 @@
     <string name="download_error_forbidden">Access was denied. The link may be expired or restricted; check its validity and your permissions. This does not necessarily mean you need to sign in.</string>
     <string name="download_error_unavailable">This media is unavailable; it may have been removed or the link may have expired.</string>
     <string name="download_error_captcha">The site requires CAPTCHA or human verification. Complete verification in a browser; the downloader cannot bypass it.</string>
+    <string name="download_error_formats">The page returned no downloadable audio or video formats. Check that the post is accessible and contains media, then update yt-dlp if the problem continues. The app will not bypass sign-in or content protection.</string>
+    <string name="download_error_unsupported_url">No video was recognized at this link. Check that it points to a post containing a video, not a profile or a text-only post.</string>
+    <string name="download_error_rate_limited">The platform is temporarily limiting requests. Wait a little before trying again.</string>
+    <string name="download_error_js_runtime">The JavaScript runtime required by this extractor could not be started. Update yt-dlp and try again.</string>
+    <string name="download_error_x_unknown">Could not fetch video information from this X link. Check that the post is publicly accessible without signing in, then retry. The app will not bypass sign-in or protected-content restrictions.</string>
+    <string name="error_diagnostic_id">Diagnostic ID: %1$s</string>
+    <string name="retry">Retry</string>
     <string name="download_start_msg">Download \"%1$s\"</string>
     <string name="fetch_info_error_msg">Could not fetch video info</string>
     <string name="general_settings">General</string>

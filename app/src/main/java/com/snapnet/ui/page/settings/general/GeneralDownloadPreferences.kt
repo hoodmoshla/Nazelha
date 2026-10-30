@@ -79,7 +79,7 @@ import com.google.accompanist.permissions.PermissionStatus
 import com.google.accompanist.permissions.rememberPermissionState
 import com.snapnet.App
 import com.snapnet.download.DownloadConcurrencyPolicy
-import com.snapnet.R
+import com.hoodmoshla.nazelha.R
 import com.snapnet.ui.common.booleanState
 import com.snapnet.ui.component.BackButton
 import com.snapnet.ui.component.ConfirmButton

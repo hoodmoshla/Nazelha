@@ -100,7 +100,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.snapnet.App
-import com.snapnet.R
+import com.hoodmoshla.nazelha.R
 import com.snapnet.ui.common.HapticFeedback.longPressHapticFeedback
 import com.snapnet.ui.common.motion.materialSharedAxisX
 import com.snapnet.ui.component.ButtonChip
@@ -125,6 +125,7 @@ import com.snapnet.ui.page.downloadv2.configure.DownloadDialogViewModel.SheetSta
 import com.snapnet.ui.page.downloadv2.configure.DownloadDialogViewModel.SheetState.InputUrl
 import com.snapnet.ui.page.downloadv2.configure.DownloadDialogViewModel.SheetState.Loading
 import com.snapnet.ui.page.downloadv2.configure.DownloadDialogViewModel.SheetState.UnsupportedUrl
+import com.snapnet.ui.page.downloadv2.downloadErrorDiagnosticId
 import com.snapnet.ui.page.downloadv2.downloadErrorMessageRes
 import com.snapnet.ui.page.downloadv2.redactDownloadErrorDetails
 import com.snapnet.ui.page.settings.command.CommandTemplateDialog
@@ -320,26 +321,23 @@ private fun ErrorPage(modifier: Modifier = Modifier, state: Error, onActionPost:
             modifier = Modifier.padding(top = 12.dp),
         )
         Text(
-            text = stringResource(downloadErrorMessageRes(state.throwable)),
+            text = stringResource(downloadErrorMessageRes(state.throwable, url)),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.error,
             modifier = Modifier.padding(top = 8.dp, start = 20.dp, end = 20.dp),
         )
-        Text(
-            text = redactDownloadErrorDetails(state.throwable.message.toString()),
-            style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier =
-                Modifier.padding(vertical = 16.dp, horizontal = 20.dp)
-                    .fillMaxWidth()
-                    .verticalScroll(rememberScrollState()),
-            maxLines = 20,
-            overflow = TextOverflow.Clip,
-        )
+        downloadErrorDiagnosticId(state.throwable)?.let { diagnosticId ->
+            Text(
+                text = stringResource(R.string.error_diagnostic_id, diagnosticId),
+                style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(vertical = 16.dp, horizontal = 20.dp),
+            )
+        }
 
         Row(modifier = Modifier) {
             FilledTonalButton(onClick = { onActionPost(state.action.withHttpConsentFlag(false)) }) {
-                Text("Retry")
+                Text(stringResource(R.string.retry))
             }
             Spacer(Modifier.width(8.dp))
             Button(

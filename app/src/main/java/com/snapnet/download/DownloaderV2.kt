@@ -8,7 +8,7 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.snapshots.SnapshotStateMap
 import com.snapnet.App
 import com.snapnet.DownloadWorkSource
-import com.snapnet.R
+import com.hoodmoshla.nazelha.R
 import com.snapnet.download.Task.DownloadState
 import com.snapnet.download.Task.DownloadState.Canceled
 import com.snapnet.download.Task.DownloadState.Completed

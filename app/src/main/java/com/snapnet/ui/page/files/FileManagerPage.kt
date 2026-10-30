@@ -84,7 +84,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.documentfile.provider.DocumentFile
 import com.snapnet.App
-import com.snapnet.R
+import com.hoodmoshla.nazelha.R
 import com.snapnet.ui.component.BackButton
 import com.snapnet.util.FileUtil
 import com.snapnet.util.PreferenceUtil.getString

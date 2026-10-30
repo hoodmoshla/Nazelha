@@ -62,7 +62,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
-import com.snapnet.R
+import com.hoodmoshla.nazelha.R
 import com.snapnet.ui.common.LocalWindowWidthState
 import com.snapnet.ui.common.Route
 import com.snapnet.ui.page.downloadv2.DownloadPageImplV2

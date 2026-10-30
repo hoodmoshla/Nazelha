@@ -2,7 +2,7 @@ package com.snapnet.database.backup
 
 import android.content.Context
 import com.snapnet.App
-import com.snapnet.R
+import com.hoodmoshla.nazelha.R
 import com.snapnet.database.objects.CommandTemplate
 import com.snapnet.database.objects.DownloadedVideoInfo
 import com.snapnet.database.objects.OptionShortcut

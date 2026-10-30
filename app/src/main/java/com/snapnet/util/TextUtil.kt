@@ -9,7 +9,7 @@ import androidx.core.text.isDigitsOnly
 import com.snapnet.App
 import com.snapnet.App.Companion.applicationScope
 import com.snapnet.App.Companion.context
-import com.snapnet.R
+import com.hoodmoshla.nazelha.R
 import java.util.regex.Pattern
 import kotlin.math.roundToInt
 import kotlinx.coroutines.Dispatchers

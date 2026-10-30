@@ -1,5 +1,6 @@
 package com.snapnet
 
+import com.hoodmoshla.nazelha.R
 import android.content.BroadcastReceiver
 import android.content.ClipData
 import android.content.Context

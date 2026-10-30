@@ -80,7 +80,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.snapnet.R
+import com.hoodmoshla.nazelha.R
 import com.snapnet.download.DownloaderV2
 import com.snapnet.download.TaskFactory
 import com.snapnet.ui.component.ClearButton

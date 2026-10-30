@@ -52,7 +52,7 @@ import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.unit.dp
 import com.google.accompanist.pager.HorizontalPagerIndicator
 import com.google.android.material.color.DynamicColors
-import com.snapnet.R
+import com.hoodmoshla.nazelha.R
 import com.snapnet.download.Task
 import com.snapnet.ui.common.LocalDarkTheme
 import com.snapnet.ui.common.LocalDynamicColorSwitch

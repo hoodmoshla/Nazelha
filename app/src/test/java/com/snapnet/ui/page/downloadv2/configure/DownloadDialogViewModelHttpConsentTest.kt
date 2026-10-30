@@ -1,6 +1,6 @@
 package com.snapnet.ui.page.downloadv2.configure
 
-import com.snapnet.R
+import com.hoodmoshla.nazelha.R
 import com.snapnet.database.objects.CommandTemplate
 import com.snapnet.download.FakeDownloaderV2
 import com.snapnet.util.DownloadUtil

@@ -42,7 +42,7 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import com.snapnet.R
+import com.hoodmoshla.nazelha.R
 import com.snapnet.database.objects.DownloadedVideoInfo
 import com.snapnet.ui.common.HapticFeedback.slightHapticFeedback
 import com.snapnet.ui.component.FilledTonalButtonWithIcon

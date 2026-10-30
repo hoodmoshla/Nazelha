@@ -24,7 +24,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.snapnet.R
+import com.hoodmoshla.nazelha.R
 import com.snapnet.util.ToastUtil
 import com.snapnet.util.UpdateUtil
 import kotlinx.coroutines.Dispatchers

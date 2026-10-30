@@ -18,7 +18,7 @@ import com.snapnet.Downloader.onTaskEnded
 import com.snapnet.Downloader.onTaskError
 import com.snapnet.Downloader.onTaskStarted
 import com.snapnet.Downloader.toNotificationId
-import com.snapnet.R
+import com.hoodmoshla.nazelha.R
 import com.snapnet.database.objects.CommandTemplate
 import com.snapnet.database.objects.DownloadedVideoInfo
 import com.snapnet.download.http.HttpDownloadSecurityPolicy
@@ -147,8 +147,27 @@ object DownloadUtil {
         request.runCatching {
             val response: YoutubeDLResponse =
                 YoutubeDL.getInstance().execute(request, taskKey, null)
-            jsonFormat.decodeFromString(response.out)
+            parseVideoInfo(response.out)
         }
+
+    /** A single-video/share request must never silently become a blank format picker. */
+    internal fun parseVideoInfo(output: String): VideoInfo {
+        val info = jsonFormat.decodeFromString<VideoInfo>(output)
+        if (info.formats.isNullOrEmpty()) {
+            val playlistHint =
+                if (info.type.equals("playlist", ignoreCase = true)) {
+                    " The link resolved to a playlist instead of one video."
+                } else {
+                    ""
+                }
+            throw IllegalStateException("No video formats found in yt-dlp response.$playlistHint")
+        }
+        return info
+    }
+
+    /** Shared format lists must not be reduced by the user's preferred-quality sorter. */
+    internal fun shouldApplyFormatSorter(taskKey: String?): Boolean =
+        taskKey?.startsWith("FetchShared-") != true
 
     @CheckResult
     fun fetchVideoInfoFromUrl(
@@ -173,7 +192,7 @@ object DownloadUtil {
                     // Listing every quality must not apply a preferred-resolution sorter; it can
                     // omit
                     // lower real qualities before the share sheet sees them.
-                    if (taskKey?.startsWith("FetchShared_") != true) {
+                    if (shouldApplyFormatSorter(taskKey)) {
                         applyFormatSorter(this@with, toFormatSorter())
                     }
                     if (cookies) {

@@ -15,7 +15,7 @@ import androidx.compose.ui.res.painterResource
 import coil.compose.AsyncImagePainter
 import coil.imageLoader
 import coil.request.ImageRequest
-import com.snapnet.R
+import com.hoodmoshla.nazelha.R
 
 @Composable
 fun AsyncImageImpl(

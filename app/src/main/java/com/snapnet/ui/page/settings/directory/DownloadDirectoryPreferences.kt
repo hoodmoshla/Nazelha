@@ -75,7 +75,7 @@ import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.PermissionStatus
 import com.google.accompanist.permissions.rememberPermissionState
 import com.snapnet.App
-import com.snapnet.R
+import com.hoodmoshla.nazelha.R
 import com.snapnet.download.DownloaderV2
 import com.snapnet.ui.common.booleanState
 import com.snapnet.ui.common.stringState

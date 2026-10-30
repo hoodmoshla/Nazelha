@@ -29,7 +29,7 @@ import com.google.accompanist.web.AccompanistWebViewClient
 import com.google.accompanist.web.WebView
 import com.google.accompanist.web.rememberWebViewState
 import com.google.android.material.R
-import com.snapnet.R as AppR
+import com.hoodmoshla.nazelha.R as AppR
 import com.snapnet.util.PreferenceUtil.updateString
 import com.snapnet.util.USER_AGENT_STRING
 import com.snapnet.util.connectWithDelimiter

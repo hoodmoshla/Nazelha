@@ -80,7 +80,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.snapnet.App
-import com.snapnet.R
+import com.hoodmoshla.nazelha.R
 import com.snapnet.database.backup.BackupUtil
 import com.snapnet.database.backup.BackupUtil.BackupDestination.Clipboard
 import com.snapnet.database.backup.BackupUtil.BackupDestination.File

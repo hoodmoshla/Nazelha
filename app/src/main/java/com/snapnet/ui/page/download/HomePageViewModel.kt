@@ -11,7 +11,7 @@ import com.snapnet.Downloader
 import com.snapnet.Downloader.State
 import com.snapnet.Downloader.manageDownloadError
 import com.snapnet.Downloader.updatePlaylistResult
-import com.snapnet.R
+import com.hoodmoshla.nazelha.R
 import com.snapnet.util.CUSTOM_COMMAND
 import com.snapnet.util.DownloadUtil
 import com.snapnet.util.FORMAT_SELECTION

@@ -92,7 +92,7 @@ import com.google.accompanist.permissions.isGranted
 import com.google.accompanist.permissions.rememberPermissionState
 import com.snapnet.App
 import com.snapnet.Downloader
-import com.snapnet.R
+import com.hoodmoshla.nazelha.R
 import com.snapnet.download.DownloaderV2
 import com.snapnet.ui.common.HapticFeedback.longPressHapticFeedback
 import com.snapnet.ui.common.HapticFeedback.slightHapticFeedback

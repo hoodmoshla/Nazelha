@@ -27,6 +27,13 @@ val previewSigningEnvironment =
         "NAZELHA_KEY_ALIAS" to providers.environmentVariable("NAZELHA_KEY_ALIAS").orNull,
         "NAZELHA_KEY_PASSWORD" to providers.environmentVariable("NAZELHA_KEY_PASSWORD").orNull,
     )
+val productionSigningEnvironment =
+    mapOf(
+        "NAZELHA_PRODUCTION_KEYSTORE_FILE" to providers.environmentVariable("NAZELHA_PRODUCTION_KEYSTORE_FILE").orNull,
+        "NAZELHA_PRODUCTION_STORE_PASSWORD" to providers.environmentVariable("NAZELHA_PRODUCTION_STORE_PASSWORD").orNull,
+        "NAZELHA_PRODUCTION_KEY_ALIAS" to providers.environmentVariable("NAZELHA_PRODUCTION_KEY_ALIAS").orNull,
+        "NAZELHA_PRODUCTION_KEY_PASSWORD" to providers.environmentVariable("NAZELHA_PRODUCTION_KEY_PASSWORD").orNull,
+    )
 
 if (providers.gradleProperty("nazelhaRequirePreviewSigning").orNull == "true") {
     val missingInputs = previewSigningEnvironment.filterValues { it.isNullOrBlank() }.keys
@@ -37,16 +44,25 @@ if (providers.gradleProperty("nazelhaRequirePreviewSigning").orNull == "true") {
     check(file(keystorePath).isFile) { "Nazelha preview signing keystore file is unavailable." }
 }
 
+if (providers.gradleProperty("nazelhaRequireProductionSigning").orNull == "true") {
+    val missingInputs = productionSigningEnvironment.filterValues { it.isNullOrBlank() }.keys
+    check(missingInputs.isEmpty()) {
+        "Missing required Nazelha production signing inputs: ${missingInputs.joinToString()}"
+    }
+    val keystorePath = productionSigningEnvironment.getValue("NAZELHA_PRODUCTION_KEYSTORE_FILE")!!
+    check(file(keystorePath).isFile) { "Nazelha production signing keystore file is unavailable." }
+}
+
 android {
     compileSdk = 35
 
     buildFeatures { buildConfig = true }
 
     defaultConfig {
-        applicationId = "com.snapnet.preview"
+        applicationId = "com.hoodmoshla.nazelha"
         minSdk = 24
         targetSdk = 35
-        versionCode = 100_080_400
+        versionCode = 100_090_400
         check(versionCode == currentVersionCode)
 
         versionName = baseVersionName
@@ -101,12 +117,20 @@ android {
             keyPassword = previewSigningEnvironment["NAZELHA_KEY_PASSWORD"]
             storeType = "JKS"
         }
+        create("nazelhaProduction") {
+            productionSigningEnvironment["NAZELHA_PRODUCTION_KEYSTORE_FILE"]?.let { storeFile = file(it) }
+            storePassword = productionSigningEnvironment["NAZELHA_PRODUCTION_STORE_PASSWORD"]
+            keyAlias = productionSigningEnvironment["NAZELHA_PRODUCTION_KEY_ALIAS"]
+            keyPassword = productionSigningEnvironment["NAZELHA_PRODUCTION_KEY_PASSWORD"]
+            storeType = "JKS"
+        }
     }
 
     buildTypes {
         release {
             isMinifyEnabled = true
             isShrinkResources = true
+            signingConfig = signingConfigs.getByName("nazelhaProduction")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
@@ -148,6 +172,7 @@ android {
 
         create("githubPreview") {
             dimension = "publishChannel"
+            applicationId = "com.snapnet.preview"
         }
 
         create("fdroid") {
@@ -186,7 +211,7 @@ android {
     }
     androidResources { generateLocaleConfig = true }
 
-    namespace = "com.snapnet"
+    namespace = "com.hoodmoshla.nazelha"
 }
 
 ktfmt { kotlinLangStyle() }

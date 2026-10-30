@@ -16,7 +16,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.platform.testTag
-import com.snapnet.R
+import com.hoodmoshla.nazelha.R
 
 /** The five persistent destinations, declared in the required logical RTL order. */
 enum class TopLevelDestination(val route: String) {
