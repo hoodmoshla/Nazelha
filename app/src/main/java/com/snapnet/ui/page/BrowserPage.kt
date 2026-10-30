@@ -193,7 +193,7 @@ fun BrowserPage(onDownloadLink: (String) -> Unit, modifier: Modifier = Modifier)
 
     Column(modifier = modifier.fillMaxSize()) {
         Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
@@ -203,7 +203,7 @@ fun BrowserPage(onDownloadLink: (String) -> Unit, modifier: Modifier = Modifier)
                 modifier = Modifier.weight(1f).testTag("browser_address_input"),
                 singleLine = true,
                 shape = RoundedCornerShape(18.dp),
-                label = { Text(stringResource(R.string.browser_address)) },
+                placeholder = { Text(stringResource(R.string.browser_address), maxLines = 1) },
                 leadingIcon = { Icon(Icons.Outlined.Search, contentDescription = null) },
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Go),
                 keyboardActions = KeyboardActions(onGo = { navigateToAddress() }),
@@ -219,7 +219,10 @@ fun BrowserPage(onDownloadLink: (String) -> Unit, modifier: Modifier = Modifier)
             }
         }
         Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
+            modifier =
+                Modifier.fillMaxWidth()
+                    .padding(horizontal = 8.dp)
+                    .testTag("browser_action_bar"),
             horizontalArrangement = Arrangement.SpaceEvenly,
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -265,12 +268,17 @@ fun BrowserPage(onDownloadLink: (String) -> Unit, modifier: Modifier = Modifier)
                 Icon(Icons.Outlined.Share, contentDescription = stringResource(R.string.share))
             }
         }
-        Text(
-            stringResource(R.string.browser_privacy_note),
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
+        if (currentUrl.isBlank()) {
+            Text(
+                stringResource(R.string.browser_privacy_note),
+                modifier =
+                    Modifier.fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 4.dp)
+                        .testTag("browser_privacy_note"),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
         if (progress in 1..99) {
             LinearProgressIndicator(
                 progress = { progress / 100f },

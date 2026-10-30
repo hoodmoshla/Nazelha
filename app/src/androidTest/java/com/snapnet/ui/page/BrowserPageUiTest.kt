@@ -27,7 +27,9 @@ class BrowserPageUiTest {
 
         composeRule.waitForIdle()
         composeRule.onNodeWithTag("browser_address_input").assertIsDisplayed()
+        composeRule.onNodeWithTag("browser_action_bar").assertIsDisplayed()
         composeRule.onNodeWithTag("browser_start_panel").assertIsDisplayed()
+        composeRule.onNodeWithTag("browser_privacy_note").assertIsDisplayed()
         assertTrue(
             "The empty WebView should not be composed on the browser start screen",
             composeRule.onAllNodesWithTag("browser_webview").fetchSemanticsNodes().isEmpty(),
@@ -51,9 +53,15 @@ class BrowserPageUiTest {
         }
 
         composeRule.onNodeWithTag("browser_webview", useUnmergedTree = true).assertIsDisplayed()
+        composeRule.onNodeWithTag("browser_address_input").assertIsDisplayed()
+        composeRule.onNodeWithTag("browser_action_bar").assertIsDisplayed()
         assertTrue(
             "The start panel should be replaced after an HTTPS address is submitted",
             composeRule.onAllNodesWithTag("browser_start_panel").fetchSemanticsNodes().isEmpty(),
+        )
+        assertTrue(
+            "The long privacy note should not take space while a page is open",
+            composeRule.onAllNodesWithTag("browser_privacy_note").fetchSemanticsNodes().isEmpty(),
         )
     }
 }
