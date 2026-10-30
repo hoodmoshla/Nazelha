@@ -1,8 +1,13 @@
 package com.snapnet.util
 
+import java.io.ByteArrayOutputStream
+import java.io.File
 import java.util.GregorianCalendar
 import java.util.Locale
 import java.util.TimeZone
+import java.util.zip.ZipEntry
+import java.util.zip.ZipOutputStream
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -33,6 +38,46 @@ class YtDlpVersionTest {
         assertFalse(YtDlpVersion.isOlderThanDays("not-a-version", 90, now))
         assertFalse(YtDlpVersion.isOlderThanDays("2026.13.40", 90, now))
         assertFalse(YtDlpVersion.isOlderThanDays("2027.01.01", 90, now))
+    }
+
+    @Test
+    fun readsVersionFromZipAppWithoutShebang() {
+        val zipApp = createZipApp(prefix = byteArrayOf())
+
+        try {
+            assertEquals("2026.10.26", YtDlpVersion.readVersionFromBinary(zipApp))
+        } finally {
+            zipApp.delete()
+        }
+    }
+
+    @Test
+    fun readsVersionFromOfficialStyleZipAppWithShebangPrefix() {
+        val zipApp = createZipApp(prefix = "#!/usr/bin/env python3\n".toByteArray())
+
+        try {
+            assertEquals("2026.10.26", YtDlpVersion.readVersionFromBinary(zipApp))
+        } finally {
+            zipApp.delete()
+        }
+    }
+
+    private fun createZipApp(prefix: ByteArray): File {
+        val zipBytes =
+            ByteArrayOutputStream().use { output ->
+                ZipOutputStream(output).use { zip ->
+                    zip.putNextEntry(ZipEntry("yt_dlp/version.py"))
+                    zip.write("__version__ = '2026.10.26'\n".toByteArray())
+                    zip.closeEntry()
+                }
+                output.toByteArray()
+            }
+        return File.createTempFile("yt-dlp-test-", ".zipapp").apply {
+            outputStream().use { output ->
+                output.write(prefix)
+                output.write(zipBytes)
+            }
+        }
     }
 
     private fun utcMidnight(year: Int, month: Int, day: Int): Long =

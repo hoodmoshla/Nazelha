@@ -7,7 +7,6 @@ import java.io.File
 import java.io.IOException
 import java.net.URI
 import java.util.concurrent.TimeUnit
-import java.util.zip.ZipFile
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
@@ -24,7 +23,6 @@ object YtDlpUpdater {
     private const val TAG = "YtDlpUpdater"
     private const val BINARY_NAME = "yt-dlp"
     private const val CHECKSUMS_NAME = "SHA2-256SUMS"
-    private const val VERSION_ENTRY = "yt_dlp/version.py"
     private const val STABLE_REPOSITORY = "yt-dlp/yt-dlp"
     private const val NIGHTLY_REPOSITORY = "yt-dlp/yt-dlp-nightly-builds"
     private const val MASTER_REPOSITORY = "yt-dlp/yt-dlp-master-builds"
@@ -88,9 +86,11 @@ object YtDlpUpdater {
     private fun verifyInstalledBinary(file: File?): Boolean {
         if (!isUsable(file)) return false
         val binary = file ?: return false
-        return runCatching { ZipFile(binary).use { it.getEntry(VERSION_ENTRY) != null } }
-            .onFailure { Log.w(TAG, "yt-dlp asset is not a readable zipapp", it) }
-            .getOrDefault(false)
+        val version =
+            runCatching { YtDlpVersion.readVersionFromBinary(binary) }
+                .onFailure { Log.w(TAG, "yt-dlp asset is not a readable zipapp", it) }
+                .getOrNull()
+        return version != null
     }
 
     private fun backupDir(context: Context) = File(context.noBackupFilesDir, "ytdlp-backup")
