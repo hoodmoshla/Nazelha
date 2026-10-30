@@ -23,6 +23,7 @@ import androidx.appcompat.app.AppCompatDelegate
 import androidx.core.content.ContextCompat
 import androidx.core.content.getSystemService
 import com.google.android.material.color.DynamicColors
+import com.hoodmoshla.nazelha.BuildConfig
 import com.snapnet.download.DownloaderV2
 import com.snapnet.download.DownloaderV2Impl
 import com.snapnet.ui.page.download.HomePageViewModel
